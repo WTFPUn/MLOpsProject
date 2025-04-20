@@ -1,0 +1,23 @@
+datasource db {
+    provider = "mysql"
+    url      = env("AWS_DB_URL")
+}
+
+generator client {
+    provider             = "prisma-client-py"
+    recursive_type_depth = 5
+}
+
+model News {
+    id        Int      @id @default(autoincrement())
+    title     String   @db.VarChar(255)
+    content   String   @db.Text
+    startDate DateTime @unique @db.Date
+}
+
+model NewsTest {
+    id        Int      @id @default(autoincrement())
+    title     String   @db.VarChar(255)
+    content   String   @db.Text
+    startDate DateTime @unique @db.Date
+}
