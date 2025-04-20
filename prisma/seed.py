@@ -35,8 +35,7 @@ async def seed():
             "content": "This is a test news article.",
             "startDate": start_date_last,
         },
-             
-              ],
+        ],
         
 
               
