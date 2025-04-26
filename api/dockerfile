@@ -1,5 +1,5 @@
 # Use an official base image (e.g., Python 3.9)
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -13,6 +13,8 @@ COPY . .
 
 # Expose the port the app runs on (if applicable)
 EXPOSE 8000
+
+
 
 # Define the command to run the application
 CMD ["python", "app/main.py"]
