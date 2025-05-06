@@ -6,30 +6,24 @@ from sklearn.linear_model import LinearRegression # Placeholder model
 import os
 import argparse
 from model_manager import *
+from utils.model import Embedding_model
+from sklearn.metrics import calinski_harabasz_score
+from pathlib import Path
+
 # --- Configuration ---
 MLFLOW_TRACKING_URI = "http://127.0.0.1:5000" # Or a local './mlruns' dir, or Databricks etc.
 # To run locally without a server, comment the line above.
 # To run with a server: mlflow server --host 127.0.0.1 --port 5000
 
-
+MODEL_REGISTRY_NAME = "baseline"
 EXPERIMENT_NAME = "Vector_Prediction_Viz"
 MODEL_REGISTRY_NAME = "MyVectorPredictor"
 PLOT_FILENAME = "prediction_vectors.png"
 
-# --- 3. Define and Calculate Custom Metric ---
-def calculate_vector_spread(vectors):
-    """Custom metric: Average distance from the centroid."""
-    if vectors.shape[0] < 2:
-        return 0.0
-    centroid = np.mean(vectors, axis=0)
-    distances = np.linalg.norm(vectors - centroid, axis=1)
-    return np.mean(distances)
-
-# --- 4. Generate 2D Plot ---
-def plot_embed(prediction):
+def plot_embed(self, prediction):
     print(f"Generating plot '{PLOT_FILENAME}'...")
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.scatter(predictions[:, 0], predictions[:, 1], alpha=0.7)
+    ax.scatter(prediction[:, 0], prediction[:, 1], alpha=0.7)
     ax.set_title("2D Visualization of Prediction Vectors")
     ax.set_xlabel("Dimension 1")
     ax.set_ylabel("Dimension 2")
@@ -38,31 +32,74 @@ def plot_embed(prediction):
     plt.close(fig) # Close the plot to free memory
     print("Plot saved.")
 
+def calculate_vector_spread(vectors, label):
+    """Custom metric: Average distance from the centroid."""
+    score = calinski_harabasz_score(vectors, label)
+    return score
+
 def is_challenged():
+    """this is called when we want to use conditional base maintenance"""
     # get current model
     # test with cUpdted testset
     # load past log (cool start initial lg 0 and register zeroshot as defuat model)
     # if performance drop at {percent} rate of previous result
     # return status of the need tfor model update
-    pass 
+    return True
+
+def get_test(debug=False):
+    """make model prediction on past 1 week data
+
+    Returns:
+        list of string : 1 week data
+    """
+    sentences = []
+    if debug:
+        # ตอนนี้อ่าน Doc จาก txt ไปก่อน
+        txt_files = list(Path("./testcase").glob("*.txt"))
+        for txt_file in txt_files:
+            with txt_file.open("r", encoding="utf-8") as f:
+                full_text = f.read().strip()
+                if full_text:
+                    sentences.append(full_text)
+        print(f"รวมได้ {len(sentences)} ไฟล์ข้อความ")
+
+    return sentences
+
+def get_current_model():
+    baseline = "BAAI/bge-m3"
+    return baseline
 
 def main():
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    # --- 5. Log with MLflow ---
     print("Starting MLflow run...")
     mlflow.set_experiment(EXPERIMENT_NAME)
-    if is_challenged():
 
+    if is_challenged():
         with mlflow.start_run() as run:
             run_id = run.info.run_uuid
             print(f"MLflow Run ID: {run_id}")
+            # get current best mlflow registry name 
+            MODEL_REGISTRY_NAME = get_current_model()
+
+            # load current model 
+            model = Embedding_model(model_name=MODEL_REGISTRY_NAME)
 
             # Log parameters (optional)
-            mlflow.log_param("num_vectors", n_vectors)
+            # mlflow.log_param("num_vectors", n_vectors)
 
+            # make model prediction on past 1 week data
+            test_set = get_test(debug=True)
+
+            test_set_embedding  = model.embed(test_set)
+
+            cluster = model.predict(test_set_embedding)
+
+            Ch = calculate_vector_spread(test_set_embedding, cluster)
+            # print(Ch)
+            # print(type(Ch))
             # Log custom metric
-            mlflow.log_metric("vector_spread", custom_metric_value)
-            print(f"Logged metric: vector_spread={custom_metric_value:.4f}")
+            mlflow.log_metric("calinski_harabasz_score", Ch)
+            print(f"Logged metric: vector_spread={calinski_harabasz_score}")
 
             # Log the plot artifact
             mlflow.log_artifact(PLOT_FILENAME)
