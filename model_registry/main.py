@@ -153,6 +153,7 @@ def main():
     
     client = mlflow.tracking.MlflowClient()
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
+    init = False
 
     # set initial run flag
     if experiment is None:
@@ -182,6 +183,8 @@ def main():
     else:
          # get current best mlflow registry name 
         MODEL_REGISTRY_NAME = get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score")
+    
+    NAME = experiment.name
 
     mlflow.set_experiment(EXPERIMENT_NAME)
     if is_challenged(): 
@@ -214,10 +217,11 @@ def main():
             # This takes the logged model from the run and registers it
             model_uri = f"runs:/{run_id}/model"
             print(f"Registering model from URI: {model_uri}")
-            # registered_model_info = mlflow.register_model(
-            #     model_uri=model_uri,
-            #     name=MODEL_REGISTRY_NAME
-            # )
+            registered_model_info = mlflow.register_model(
+                model_uri=model_uri,
+                name=NAME
+            )
+            print(f"Successfully registered model '{NAME}' Version: {registered_model_info.version}")
             # print(f"Model registered as '{MODEL_REGISTRY_NAME}' version {registered_model_info.version}")
             if init:
                 mlflow.set_tag(PRODUCTION_TAG_KEY, PRODUCTION_TAG_VALUE)
