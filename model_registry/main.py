@@ -136,6 +136,13 @@ def get_current_model(
     best_metric_value = best_run_row[f'metrics.{METRIC_TO_OPTIMIZE}']
     best_hf_repo_id = best_run_row[f'params.{HF_REPO_ID_PARAM_NAME}']
 
+    model_uri = f"runs:/{best_run_id}/model"
+    print(f"Registering model from URI: {model_uri}")
+    registered_model_info = mlflow.register_model(
+            model_uri=model_uri,
+            name=EXPERIMENT_NAME
+    )
+
     print("\n--- Best Run Found ---")
     print(f"Run ID: {best_run_id}")
     print(f"Metric ({METRIC_TO_OPTIMIZE}): {best_metric_value}")
@@ -144,7 +151,58 @@ def get_current_model(
     if not best_hf_repo_id:
         best_hf_repo_id = "BAAI/bge-m3"
     # baseline = "BAAI/bge-m3"
-    return best_hf_repo_id
+    return best_hf_repo_id, registered_model_info.version
+
+def finetune(lastest_register_hf_repo):
+    """_summary_
+    """
+    # get latest model checkpoint
+    # finetune
+    model = None
+    return model
+
+def run_experiment(init, NAME, MODEL_REGISTRY_NAME):
+    with mlflow.start_run() as run:
+        run_id = run.info.run_uuid
+        print(f"MLflow Run ID: {run_id}")
+
+        # load current model 
+        model = Embedding_model(model_name=MODEL_REGISTRY_NAME)
+
+        # make model prediction on past 1 week data
+        test_set = get_test(debug=True)
+
+        test_set_embedding  = model.embed(test_set)
+
+        cluster = model.predict(test_set_embedding)
+
+        Ch = calculate_vector_spread(test_set_embedding, cluster)
+        # print(Ch)
+        # print(type(Ch))
+        # Log custom metric
+        mlflow.log_metric("calinski_harabasz_score", Ch)
+        print(f"Logged metric: vector_spread={calinski_harabasz_score}")
+
+
+        mlflow.log_param(HF_REPO_ID_PARAM_NAME, MODEL_REGISTRY_NAME) #TODO: change it to target repo (when finetune is called to test the score)
+        mlflow.set_tag("huggingface_repo_url", f"https://huggingface.co/{MODEL_REGISTRY_NAME}")
+
+        # --- 6. Register the Model ---
+        # This takes the logged model from the run and registers it
+        model_uri = f"runs:/{run_id}/model"
+        print(f"Registering model from URI: {model_uri}")
+        registered_model_info = mlflow.register_model(
+            model_uri=model_uri,
+            name=NAME
+        )
+        print(f"Successfully registered model '{NAME}' Version: {registered_model_info.version}")
+        # print(f"Model registered as '{MODEL_REGISTRY_NAME}' version {registered_model_info.version}")
+        if init:
+            mlflow.set_tag(PRODUCTION_TAG_KEY, PRODUCTION_TAG_VALUE)
+            print(f"This is the first run in the experiment. Tagged with '{PRODUCTION_TAG_KEY}': '{PRODUCTION_TAG_VALUE}'.")
+
+    print("MLflow logging complete.")
+    return registered_model_info.version, Ch
 
 def main():
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -155,7 +213,7 @@ def main():
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
     init = False
 
-    # set initial run flag
+    # set cold start code
     if experiment is None:
         init = True
         print("running first experiment..")
@@ -182,56 +240,130 @@ def main():
                 raise e # Re-raise other MLflow exceptions
     else:
          # get current best mlflow registry name 
-        MODEL_REGISTRY_NAME = get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score")
+        MODEL_REGISTRY_NAME, production_version = get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score")
     
     NAME = experiment.name
 
     mlflow.set_experiment(EXPERIMENT_NAME)
+
+    # evaluate current production model on data drift
     if is_challenged(): 
-        with mlflow.start_run() as run:
-            run_id = run.info.run_uuid
-            print(f"MLflow Run ID: {run_id}")
-
-            # load current model 
-            model = Embedding_model(model_name=MODEL_REGISTRY_NAME)
-
-            # make model prediction on past 1 week data
-            test_set = get_test(debug=True)
-
-            test_set_embedding  = model.embed(test_set)
-
-            cluster = model.predict(test_set_embedding)
-
-            Ch = calculate_vector_spread(test_set_embedding, cluster)
-            # print(Ch)
-            # print(type(Ch))
-            # Log custom metric
-            mlflow.log_metric("calinski_harabasz_score", Ch)
-            print(f"Logged metric: vector_spread={calinski_harabasz_score}")
-
-
-            mlflow.log_param(HF_REPO_ID_PARAM_NAME, MODEL_REGISTRY_NAME)
-            mlflow.set_tag("huggingface_repo_url", f"https://huggingface.co/{MODEL_REGISTRY_NAME}")
-
-            # --- 6. Register the Model ---
-            # This takes the logged model from the run and registers it
-            model_uri = f"runs:/{run_id}/model"
-            print(f"Registering model from URI: {model_uri}")
-            registered_model_info = mlflow.register_model(
-                model_uri=model_uri,
-                name=NAME
-            )
-            print(f"Successfully registered model '{NAME}' Version: {registered_model_info.version}")
-            # print(f"Model registered as '{MODEL_REGISTRY_NAME}' version {registered_model_info.version}")
-            if init:
-                mlflow.set_tag(PRODUCTION_TAG_KEY, PRODUCTION_TAG_VALUE)
-                print(f"This is the first run in the experiment. Tagged with '{PRODUCTION_TAG_KEY}': '{PRODUCTION_TAG_VALUE}'.")
-
-        print("MLflow logging complete.")
-
+        current_log_version, current_score = run_experiment(init, NAME, MODEL_REGISTRY_NAME)
         # Cleanup the plot file
         if os.path.exists(PLOT_FILENAME):
             os.remove(PLOT_FILENAME)
+
+    # now we compare performance of production model at version t-1 and t 
+    MODEL_VERSION = int(current_log_version) - 1
+    # if this is first version terminate
+    if MODEL_VERSION == -1 or init:
+        exit()        
+    try:
+        # 1. Get the Model Version object
+        model_version_details = client.get_model_version(
+            name=NAME,
+            version=MODEL_VERSION
+        )
+
+        if not model_version_details:
+            print(f"Model Version '{MODEL_VERSION}' for model '{NAME}' not found.")
+            exit()
+
+        print(f"\n--- Model Version Details ---")
+        print(f"Registered Model Name: {model_version_details.name}")
+        print(f"Version: {model_version_details.version}")
+        print(f"Status: {model_version_details.status}")
+        print(f"Current Stage: {model_version_details.current_stage}")
+        print(f"Creation Timestamp: {model_version_details.creation_timestamp}")
+        print(f"Source Run URI (from source attribute): {model_version_details.source}") # Example: runs:/<run_id>/model-path
+
+        # 2. Extract the run_id
+        # The model_version_details object should have a run_id attribute directly
+        source_run_id = model_version_details.run_id
+        if not source_run_id:
+            # Fallback: Try to parse from the 'source' URI if run_id is not directly available
+            # (Usually, run_id is directly available)
+            if model_version_details.source and model_version_details.source.startswith("runs:/"):
+                source_run_id = model_version_details.source.split('/')[1]
+            else:
+                print("Could not determine the source run ID for this model version.")
+                exit()
+
+        print(f"Source Run ID: {source_run_id}")
+
+
+        # 3. Get the Run object
+        run_details = client.get_run(source_run_id)
+
+        if not run_details:
+            print(f"Run with ID '{source_run_id}' not found.")
+            exit()
+
+        print(f"\n--- Source Run Details ---")
+        print(f"Run ID: {run_details.info.run_id}")
+        print(f"Run Name: {run_details.data.tags.get('mlflow.runName', 'N/A')}") # Run name is a tag
+        print(f"Run Status: {run_details.info.status}")
+        print(f"Run Start Time: {run_details.info.start_time}")
+        metrics = run_details.data.metrics
+        print(f"Score: {metrics}")
+        prev_score = metrics["calinski_harabasz_score"]
+        # 4. Get the Experiment ID and details
+        source_experiment_id = run_details.info.experiment_id
+        experiment_details = client.get_experiment(source_experiment_id)
+
+        if not experiment_details:
+            print(f"Experiment with ID '{source_experiment_id}' not found.")
+            exit()
+
+        print(f"\n--- Source Experiment Details ---")
+        print(f"Experiment ID: {experiment_details.experiment_id}")
+        print(f"Experiment Name: {experiment_details.name}")
+        print(f"Experiment Artifact Location: {experiment_details.artifact_location}")
+
+    except MlflowException as e:
+        if "RESOURCE_DOES_NOT_EXIST" in str(e) or "Could not find" in str(e):
+            print(f"Error: Model '{NAME}' or Version '{MODEL_VERSION}' not found.")
+            print(f"MLflow Exception: {e}")
+        else:
+            print(f"An MLflow error occurred: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    # trigger finetune if huge changes occur
+    diff = current_score - prev_score
+
+    need_finetune = diff/prev_score >= 1.0
+    if need_finetune:
+        new_model = finetune()
+        # test the model
+        new_log_version, new_score = run_experiment(False, NAME, new_model)
+        # decision
+        if new_score < current_score:
+            # accept
+            # new_model.push_to_hub()
+            # set experiment of new version to production
+            client.transition_model_version_stage(
+                name=NAME,
+                version=new_log_version, # Ensure it's a string
+                stage=PRODUCTION_TAG_VALUE, 
+                archive_existing_versions=False
+            )
+            # set experiment of latest production version to Archived
+            client.transition_model_version_stage(
+                name=NAME,
+                version=production_version, # Ensure it's a string
+                stage="Archived", # Or "Archived" if you prefer
+                archive_existing_versions=False
+            )
+        else:
+            # nothing just archieve the finetune version
+            # TODO: check nopwaday practice about model staging first
+            client.transition_model_version_stage(
+                name=NAME,
+                version=new_log_version, # Ensure it's a string
+                stage="Archived", 
+                archive_existing_versions=False
+            )
 
 if __name__ == "__main__":
     main()
