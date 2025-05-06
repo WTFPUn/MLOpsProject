@@ -2,7 +2,7 @@ import pandas as pd
 from llama_cpp import Llama
 import time
 
-data = pd.read_csv("../scraping/thairath_news.csv")[["content"]].dropna()
+data = pd.read_csv("../scraping/thairath_news.csv")[["content"]].dropna(subset=["content"], how="all")
 test = data["content"].values.tolist()
 model_path = "model/pathumma-llm-text-1.0.0-q4_k_m.gguf"  # <--- CHANGE THIS
 # 2. Initialize the Llama model
