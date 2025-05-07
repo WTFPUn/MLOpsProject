@@ -5,3 +5,5 @@ boto3
 python-dotenv
 prisma
 requests
+prometheus-fastapi-instrumentator
+redis
