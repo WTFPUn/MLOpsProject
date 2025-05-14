@@ -161,6 +161,6 @@ watchfiles==1.0.5
     # via uvicorn
 websockets==15.0.1
     # via uvicorn
-bs4 == 4.13.4
+bs4
 pandas == 2.2.3
 apache-airflow == 3.0.1
