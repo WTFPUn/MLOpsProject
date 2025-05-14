@@ -7,14 +7,8 @@ from airflow.decorators import task
 from airflow.models import Variable
 from scraping.scraping import scrape_thairath
 
-RAW_BUCKET         = Variable.get("RAW_NEWS_BUCKET",    default_var="news-raw")
-PROC_BUCKET        = Variable.get("PROC_NEWS_BUCKET",   default_var="news-proc")
-SUMMARY_BUCKET     = Variable.get("SUMMARY_BUCKET",     default_var="news-summaries")
-MODEL_REGISTRY_URI = Variable.get("MODEL_REGISTRY_URI", default_var="s3://model-registry")
-
 AWS_REGION         = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
-SCRAPER_SCRIPT     = "/opt/pipelines/scraping.py"
-GEMMA_MODEL_PATH   = "/opt/models/gemma-3"
+GEMMA_MODEL_PATH   = ""
 
 default_args = {
     "owner":           "SuperAIAinsurance",
@@ -47,9 +41,10 @@ with DAG(
         return out_path
       except Exception as e:
         print(f"❌ Scraping failed: {e}")
+        return out_path
     
     @task()
-    def upload_to_s3(csv_file: str):
+    def upload_to_s3(csv_file: str = ''):
       s3 = boto3.client("s3")
       try:
           s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
@@ -74,8 +69,10 @@ with DAG(
         print("Storing summaries...")
 
     raw_s3       = scrape_news()
-    upload_s3    = upload_to_s3()
+    upload_s3    = upload_to_s3(raw_s3)
     bert_s3      = bert_annotate()
     topics_s3    = topic_modelling()
     summary_s3   = summarise_topics()
-    store_summaries()
+    store_sum = store_summaries()
+    
+    raw_s3 >> upload_s3 >> bert_s3 >> topics_s3 >> summary_s3 >> store_sum
