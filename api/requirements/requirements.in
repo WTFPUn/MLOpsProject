@@ -7,3 +7,6 @@ prisma
 requests
 prometheus-fastapi-instrumentator
 redis
+bs4
+pandas
+apache-airflow
