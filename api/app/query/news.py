@@ -46,7 +46,5 @@ async def query_news(date: Optional[datetime] = None, test: Optional[bool]= Fals
             },
         )
     
-    
-    
     await db.disconnect()
     return news_article
