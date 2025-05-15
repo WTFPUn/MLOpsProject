@@ -200,7 +200,7 @@ services:
       dockerfile: ./Dockerfile
     container_name: fastapi_app
     ports:
-      - "8001:8001"
+      - "8000:8000"
     volumes:
       - ./api/app:/app
       - ./api/prisma:/app/prisma
