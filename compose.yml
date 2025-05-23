@@ -219,12 +219,12 @@ services:
     container_name: redis
     networks:
       - backend
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 30s
-      retries: 50
-      start_period: 30s
+    # healthcheck: enable to debug redis uptime in terminal?
+    #   test: ["CMD", "redis-cli", "ping"]
+    #   interval: 10s
+    #   timeout: 30s
+    #   retries: 50
+    #   start_period: 30s
     restart: always
 
   prometheus:
