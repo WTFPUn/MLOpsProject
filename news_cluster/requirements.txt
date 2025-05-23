@@ -1,0 +1,8 @@
+FlagEmbedding
+pandas
+numpy
+scikit-learn
+umap-learn
+matplotlib
+seaborn
+argparse
