@@ -15,7 +15,8 @@ else:
     print("No .env file found.")
 DEBUG_PATH = os.getenv("DEBUG_PATH")
 
-def run_experiment(init, name, model_name):    
+def run_experiment(init, name, model_name):
+    client = mlflow.tracking.MlflowClient()    
     with mlflow.start_run() as run:
         mlflow.log_param(HF_REPO_ID_PARAM_NAME, model_name)
         mlflow.set_tag("huggingface_repo_url", f"https://huggingface.co/{model_name}")
@@ -33,6 +34,13 @@ def run_experiment(init, name, model_name):
         model_info = mlflow.register_model(model_uri=model_uri, name=name)
 
         if init:
-            mlflow.set_tag(PRODUCTION_TAG_KEY, PRODUCTION_TAG_VALUE)
+            client.set_registered_model_alias(
+                name=EXPERIMENT_NAME,
+                alias="Production",
+                version="1"
+            )
+            print("Transition successful!")
+
+            # mlflow.set_tag(PRODUCTION_TAG_KEY, PRODUCTION_TAG_VALUE)
 
         return model_info.version, score
