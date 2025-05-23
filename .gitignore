@@ -5,3 +5,6 @@ mlruns
 model
 .venv
 logs
+*.excalidraw
+test.*
+*.csv
