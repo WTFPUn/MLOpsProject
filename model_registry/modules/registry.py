@@ -1,5 +1,4 @@
 import mlflow
-<<<<<<< HEAD
 from mlflow.tracking import MlflowClient
 from config import HF_REPO_ID_PARAM_NAME, EXPERIMENT_NAME
 
