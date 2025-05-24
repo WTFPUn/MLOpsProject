@@ -8,3 +8,5 @@ logs
 *.excalidraw
 test.*
 *.csv
+/config
+/data
