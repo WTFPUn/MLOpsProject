@@ -3,8 +3,6 @@ import pickle
 from glob import glob
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-import umap
 from sklearn.cluster import DBSCAN
 import argparse
 
@@ -31,17 +29,11 @@ def cluster_colbert_vectors(input_folder, output_csv, as_folder = False):
 
     # Pool ColBERT vectors
     pooled_vecs = np.array([np.mean(vec, axis=0) for vec in merged_df["colbert_vecs"]])
-    # Standardize vectors
-    pooled_vecs = StandardScaler().fit_transform(pooled_vecs)
-
-    # Reduce dimensionality with UMAP
-    print("📉 Reducing to 2D with UMAP...")
-    umap_2d = umap.UMAP(n_neighbors=2, min_dist=0.1, metric="cosine", random_state=42).fit_transform(pooled_vecs)
-
+    
     # Cluster with DBSCAN
     print("🔍 Clustering with DBSCAN...")
     dbscan = DBSCAN(eps=0.5, min_samples=2, metric='euclidean')
-    labels = dbscan.fit_predict(umap_2d)
+    labels = dbscan.fit_predict(pooled_vecs)
 
     merged_df["cluster"] = labels
 

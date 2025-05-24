@@ -3,14 +3,18 @@ from sentence_transformers import SentenceTransformer
 from sentence_transformers import SentenceTransformerTrainer, SentenceTransformerTrainingArguments
 from sentence_transformers.losses import MultipleNegativesRankingLoss
 from sentence_transformers.training_args import BatchSamplers
-from datasets import load_dataset
+from datasets import Dataset, DatasetDict
+import pandas as pd
 
+# load triplet data
+df_triplet = pd.read_csv("../contrastive_news/data/triplet.csv")
 
-# Load the dataset
-dataset = load_dataset("sentence-transformers/all-nli", "triplet")
-train_dataset = dataset["train"].select(range(5000))
-eval_dataset = dataset["dev"]
-test_dataset = dataset["test"]
+dataset = Dataset.from_pandas(df_triplet[["anchor", "positive", "negative"]], preserve_index=False)
+
+# split dataset
+split = dataset.train_test_split(test_size=0.2, seed=42)
+train_dataset = split["train"]
+eval_dataset = split["test"]
 
 # Load the model
 model = SentenceTransformer("BAAI/bge-m3")
@@ -29,11 +33,8 @@ args = SentenceTransformerTrainingArguments(
     bf16=False,  # Set to True if you have a GPU that supports BF16
     batch_sampler=BatchSamplers.NO_DUPLICATES,  # MultipleNegativesRankingLoss benefits from no duplicate samples in a batch
     eval_strategy="epoch",
-    eval_steps=100,
     save_strategy="epoch",
-    save_steps=100,
-    save_total_limit=2,
-    logging_steps=100,
+    save_total_limit=1,
     report_to='none'
 )
 

@@ -41,11 +41,8 @@ def finetune():
         bf16=False,  # Set to True if you have a GPU that supports BF16
         batch_sampler=BatchSamplers.NO_DUPLICATES,  # MultipleNegativesRankingLoss benefits from no duplicate samples in a batch
         eval_strategy="epoch",
-        eval_steps=100,
         save_strategy="epoch",
-        save_steps=100,
-        save_total_limit=2,
-        logging_steps=100,
+        save_total_limit=1,
         report_to='none'
     )
 
@@ -62,4 +59,4 @@ def finetune():
     trainer.train()
 
     # Save the model
-    model.save_pretrained("models/bge-m3-news-finetuned")
+    # model.save_pretrained("models/bge-m3-news-finetuned")
