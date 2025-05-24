@@ -1,0 +1,13 @@
+sentence-transformers==4.1.0
+scikit-learn==1.6.1
+transformers==4.51.3
+mlflow==2.22.0
+huggingface-hub==0.30.2
+argparse
+pickle
+datasets
+umap-learn==0.5.2
+matplotlib
+seaborn
+pandas
+numpy

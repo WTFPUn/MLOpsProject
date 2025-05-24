@@ -5,14 +5,14 @@ import pickle
 import os
 
 
-def embed_colbert(input_csv_path):
+def embed_colbert(input_csv_path, model_name = 'BAAI/bge-m3'):
     print(f"📥 Reading: {input_csv_path}")
     df = pd.read_csv(input_csv_path)
     df = df.dropna(subset=["content"])
     texts = df["content"].tolist()
 
     print(f"🧠 Loading model...")
-    model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True)
+    model = BGEM3FlagModel(model_name, use_fp16=True)
 
     print(f"🔄 Embedding {len(texts)} texts using ColBERT vectors...")
     outputs = model.encode(texts, return_dense=False, return_sparse=False, return_colbert_vecs=True)
@@ -30,6 +30,8 @@ def embed_colbert(input_csv_path):
         pickle.dump(df, f)
 
     print("✅ Done!")
+
+    return output_pkl_path
 
 
 if __name__ == "__main__":
