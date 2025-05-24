@@ -4,10 +4,13 @@ from fastapi import FastAPI, Request, Response
 from prometheus_client import Counter, Histogram, generate_latest
 from fastapi.responses import Response as FastAPIResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel
 
-from query import query_news
+from models import News
+from query import query_news, store_news
 
 app = FastAPI()
+
 
 # Instrumentator for automatic metrics
 instrumentator = Instrumentator()
@@ -40,6 +43,31 @@ async def get_news(date: Optional[date] = None, test: Optional[bool] = False):
     REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
     with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
         return FastAPIResponse(content=news.model_dump_json(), media_type="application/json", status_code=status_code)
+
+
+
+@app.post("/news")
+async def post_news(request: Request):
+    data = await request.json()
+    try:
+        news = News(**data)
+    except ValueError as e:
+        status_code = 422
+        REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
+            return FastAPIResponse(content='{"error": "Invalid data"}', media_type="application/json", status_code=status_code)
+    
+    result = await store_news(title=news.title, content=news.content, date=news.date)
+    if not result:
+        status_code = 500
+        REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
+            return FastAPIResponse(content='{"error": "Failed to store news"}', media_type="application/json", status_code=status_code)
+    status_code = 201
+    REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
+    with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
+        return FastAPIResponse(content='{"status": "ok"}', media_type="application/json", status_code=status_code)
+
 
 @app.get("/metrics")
 def metrics():
