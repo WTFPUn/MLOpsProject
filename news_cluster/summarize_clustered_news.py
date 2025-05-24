@@ -1,9 +1,12 @@
+# summarize_clustered_news.py
+
 import argparse
 import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from datetime import date
 import os
+import re # For parsing summary
 
 # --- Global Variables for LLM (to avoid reloading) ---
 MODEL_ID = "scb10x/typhoon2.1-gemma3-4b"
@@ -56,56 +59,99 @@ def summarize_news_cluster(cluster_text: str, llm_pipeline, tokenizer_llm) -> st
         "--- ข้อมูลข่าวกลุ่มนี้ ---\n"
         f"{cluster_text}\n"
         "--- สิ้นสุดข้อมูลข่าวกลุ่มนี้ ---\n\n"
-        "กรุณาตอบตามรูปแบบ:\n"
+        "กรุณาตอบตามรูปแบบที่ให้ไว้ด้านล่างนี้ โดยเริ่มจาก **สรุปข่าว:** ตามด้วยเนื้อหาสรุป แล้วต่อด้วย **ไทม์ไลน์เหตุการณ์:** และเนื้อหาไทม์ไลน์:\n" # Modified instruction for clarity
         "**สรุปข่าว:**\n[บทสรุปข่าวของกลุ่มนี้]\n\n"
         "**ไทม์ไลน์เหตุการณ์:**\n[ไทม์ไลน์ของเหตุการณ์ในกลุ่มนี้]\n<|im_end|>\n"
-        "<|im_start|>assistant\n"
-        "**สรุปข่าว:**\n"
+        "<|im_start|>assistant\n" # Keep the assistant start token
     )
     try:
         sequences = llm_pipeline(
             prompt_template,
-            max_new_tokens=1500, # Increased for potentially detailed output
+            max_new_tokens=1500,
             do_sample=True,
             temperature=0.6,
             top_p=0.9,
-            top_k=50,
+            top_k=40,
             eos_token_id=tokenizer_llm.eos_token_id,
             pad_token_id=tokenizer_llm.pad_token_id if tokenizer_llm.pad_token_id is not None else tokenizer_llm.eos_token_id
         )
         
-        generated_summary = ""
+        generated_text = ""
         if sequences and sequences[0]['generated_text']:
             full_output = sequences[0]['generated_text']
+            # Extract text after the final <|im_start|>assistant\n
             assistant_marker = "<|im_start|>assistant\n"
-            start_idx = full_output.find(assistant_marker)
-            
-            if start_idx != -1:
-                generated_summary = full_output[start_idx + len(assistant_marker):].strip()
-                if generated_summary.endswith("<|im_end|>"):
-                    generated_summary = generated_summary[:-len("<|im_end|>")].strip()
+            # Find the last occurrence in case the prompt itself had this structure
+            last_assistant_marker_idx = full_output.rfind(assistant_marker)
+
+            if last_assistant_marker_idx != -1:
+                generated_text = full_output[last_assistant_marker_idx + len(assistant_marker):].strip()
+                if generated_text.endswith("<|im_end|>"):
+                    generated_text = generated_text[:-len("<|im_end|>")].strip()
             else:
-                generated_summary = "ERROR: Could not parse assistant response. Full output: " + full_output
-            return generated_summary
+                # Fallback if the exact marker isn't found, try to get text after prompt
+                prompt_end_marker = "กรุณาตอบตามรูปแบบที่ให้ไว้ด้านล่างนี้ โดยเริ่มจาก **สรุปข่าว:** ตามด้วยเนื้อหาสรุป แล้วต่อด้วย **ไทม์ไลน์เหตุการณ์:** และเนื้อหาไทม์ไลน์:\n"
+                prompt_idx = full_output.find(prompt_end_marker)
+                if prompt_idx != -1:
+                     generated_text = full_output[prompt_idx + len(prompt_end_marker):].strip() # This might need adjustment
+                else:
+                    generated_text = "ERROR: Could not parse assistant response. Full output: " + full_output
+            return generated_text
         else:
             return "ERROR: LLM did not return any sequences."
             
     except Exception as e:
         return f"EXCEPTION during LLM summarization: {str(e)}"
 
-def export_summary_to_csv(title_content: str, summarized_news_content: str, run_date_str: str, csv_filename: str):
+def parse_summary_from_llm_output(llm_output: str) -> str:
     """
-    Appends a new summary record (title, summarized_news, date) to a CSV file.
+    Extracts the 'สรุปข่าว' part from the LLM's structured output.
+    """
+    summary_match = re.search(r"\*\*สรุปข่าว:\*\*\s*\n(.*?)(?=\n\n\*\*ไทม์ไลน์เหตุการณ์:\*\*|\Z)", llm_output, re.DOTALL | re.IGNORECASE)
+    if summary_match:
+        return summary_match.group(1).strip()
+    return "ไม่พบส่วนสรุปข่าว"
+
+def generate_dynamic_title(summary_text: str, max_length: int = 70) -> str:
+    """
+    Generates a concise title from the summary text.
+    """
+    if not summary_text or summary_text.startswith("ERROR:") or summary_text == "ไม่พบส่วนสรุปข่าว":
+        return "หัวข้อสรุปอัตโนมัติ" # Default title if summary is problematic
+    
+    # Remove "สรุปข่าว:" if it's somehow still there at the beginning
+    if summary_text.lower().startswith("**สรุปข่าว:**"):
+        summary_text = summary_text[len("**สรุปข่าว:**"):].strip()
+    
+    first_sentence = summary_text.split('.')[0] # Take up to the first period
+    if len(first_sentence) > max_length:
+        # Try to find a natural break point (space) before max_length
+        break_point = first_sentence.rfind(' ', 0, max_length)
+        if break_point != -1:
+            return first_sentence[:break_point] + "..."
+        else:
+            return first_sentence[:max_length] + "..."
+    elif first_sentence:
+        return first_sentence
+    else: # Fallback if first sentence is empty
+        return summary_text[:max_length] + "..." if len(summary_text) > max_length else summary_text
+
+
+# --- MODIFIED Function to Export/Append Summary to CSV ---
+def export_summary_to_csv(dynamic_title: str, cluster_id: int, full_summarized_content: str, run_date_str: str, csv_filename: str):
+    """
+    Appends a new summary record (title, cluster_id, summarized_news, date) to a CSV file.
     Creates the file with headers if it doesn't exist.
     """
     data_to_append = {
-        'title': [title_content],
-        'summarized_news': [summarized_news_content],
+        'title': [dynamic_title],
+        'cluster_id': [cluster_id],
+        'summarized_news': [full_summarized_content], # This is the full LLM output for the cluster
         'date': [run_date_str]
     }
     df_new_record = pd.DataFrame(data_to_append)
     
-    csv_columns = ['title', 'summarized_news', 'date']
+    csv_columns = ['title', 'cluster_id', 'summarized_news', 'date'] # New column order
     file_exists = os.path.exists(csv_filename)
 
     try:
@@ -114,7 +160,7 @@ def export_summary_to_csv(title_content: str, summarized_news_content: str, run_
             print(f"Created new CSV file: {csv_filename} and added the first record.")
         else:
             df_new_record.to_csv(csv_filename, mode='a', header=False, index=False, encoding='utf-8-sig', columns=csv_columns)
-            # print(f"Appended record to {csv_filename}") # Uncomment for verbose output
+            # print(f"Appended record to {csv_filename}")
     except Exception as e:
         print(f"Error exporting to CSV '{csv_filename}': {e}")
 
@@ -122,7 +168,6 @@ def process_and_summarize_clustered_news(input_csv_path: str, output_csv_path: s
     """
     Main function to load clustered news, summarize each cluster, and export.
     """
-    # Initialize LLM (do this once)
     summarizer_pipeline, tokenizer_for_llm = initialize_llm_model_and_pipeline()
     if not summarizer_pipeline:
         print("LLM initialization failed. Exiting.")
@@ -140,7 +185,6 @@ def process_and_summarize_clustered_news(input_csv_path: str, output_csv_path: s
         print(f"❌ Error reading CSV {input_csv_path}: {e}")
         return
 
-    # Ensure 'content' and 'cluster' columns exist
     if 'content' not in clustered_df.columns or 'cluster' not in clustered_df.columns:
         print("❌ Error: Input CSV must contain 'content' and 'cluster' columns.")
         return
@@ -149,62 +193,67 @@ def process_and_summarize_clustered_news(input_csv_path: str, output_csv_path: s
 
     print(f"\n--- Starting News Summarization and Export to {output_csv_path} ---")
 
-    for cluster_id in unique_cluster_ids:
-        summary_title = f"สรุปข่าวกลุ่มที่ {cluster_id}"
-
-        if cluster_id == -1:
-            print(f"\nSkipping noise cluster (Cluster ID: {cluster_id}) for main summarization.")
-            # Optional: Log noise, or write a placeholder to the CSV
-            # export_summary_to_csv(summary_title,
+    for cluster_id_val in unique_cluster_ids:
+        if cluster_id_val == -1:
+            print(f"\nSkipping noise cluster (Cluster ID: {cluster_id_val}) for main summarization.")
+            # export_summary_to_csv("กลุ่มข่าว Noise",
+            #                         cluster_id_val,
             #                         "ข่าวในกลุ่ม Noise (ไม่ได้ทำการสรุปด้วย LLM)",
             #                         current_processing_date,
             #                         output_csv_path)
             continue
 
-        print(f"\n--- Processing Cluster ID: {cluster_id} ---")
+        print(f"\n--- Processing Cluster ID: {cluster_id_val} ---")
         
-        # Filter DataFrame for the current cluster
-        # Ensure 'content' is not NaN before trying to join
-        cluster_articles_df = clustered_df[clustered_df['cluster'] == cluster_id].dropna(subset=['content'])
+        cluster_articles_df = clustered_df[clustered_df['cluster'] == cluster_id_val].dropna(subset=['content'])
         
         if cluster_articles_df.empty:
-            print(f"No valid content found for cluster {cluster_id}.")
-            export_summary_to_csv(summary_title,
+            print(f"No valid content found for cluster {cluster_id_val}.")
+            export_summary_to_csv(f"กลุ่ม {cluster_id_val}: ไม่มีเนื้อหา",
+                                  cluster_id_val,
                                   "ไม่พบข่าวในกลุ่มนี้สำหรับสรุป (หรือเนื้อหาข่าวเป็นค่าว่าง)",
                                   current_processing_date,
                                   output_csv_path)
             continue
             
         current_cluster_sentences = cluster_articles_df['content'].tolist()
-        combined_text_for_llm = "\n\n---\n\n".join(map(str, current_cluster_sentences)) # Ensure all parts are strings
+        combined_text_for_llm = "\n\n---\n\n".join(map(str, current_cluster_sentences))
         
         if not combined_text_for_llm.strip():
-            print(f"Combined text for cluster {cluster_id} is empty after stripping.")
-            export_summary_to_csv(summary_title,
-                                  f"Cluster {cluster_id}: เนื้อหาข่าวว่างเปล่า ไม่สามารถสรุปได้",
+            print(f"Combined text for cluster {cluster_id_val} is empty after stripping.")
+            export_summary_to_csv(f"กลุ่ม {cluster_id_val}: เนื้อหาว่างเปล่า",
+                                  cluster_id_val,
+                                  f"Cluster {cluster_id_val}: เนื้อหาข่าวว่างเปล่า ไม่สามารถสรุปได้",
                                   current_processing_date,
                                   output_csv_path)
             continue
             
-        print(f"Summarizing text for cluster {cluster_id}...")
-        llm_output_summary = summarize_news_cluster(combined_text_for_llm, summarizer_pipeline, tokenizer_for_llm)
+        print(f"Summarizing text for cluster {cluster_id_val}...")
+        # llm_output_full is the entire response from the LLM, should include summary and timeline
+        llm_output_full = summarize_news_cluster(combined_text_for_llm, summarizer_pipeline, tokenizer_for_llm)
         
-        print(f"LLM Output for Cluster {cluster_id}:\n{llm_output_summary}")
+        # Extract the summary part for the dynamic title
+        parsed_summary_only = parse_summary_from_llm_output(llm_output_full)
+        dynamic_csv_title = generate_dynamic_title(parsed_summary_only)
         
-        export_summary_to_csv(summary_title,
-                              llm_output_summary, # This contains the full structured output
+        print(f"Generated Title for CSV: {dynamic_csv_title}")
+        print(f"Full LLM Output for Cluster {cluster_id_val}:\n{llm_output_full}")
+        
+        export_summary_to_csv(dynamic_csv_title,
+                              cluster_id_val,
+                              llm_output_full, # Save the full LLM output (summary + timeline)
                               current_processing_date,
                               output_csv_path)
     
     print(f"\n--- All processing finished. Summaries appended/saved to: {output_csv_path} ---")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Summarize clustered news using LLM and export to CSV.")
+    parser = argparse.ArgumentParser(description="Summarize clustered news using LLM and export to CSV with dynamic titles.")
     parser.add_argument("input_clustered_csv", 
                         help="Path to the input CSV file from news_cluster.py (e.g., news_clustered.csv)")
     parser.add_argument("--output_summary_csv", 
-                        default="llm_summaries_archive_with_title.csv", 
-                        help="Path to the output CSV file for summaries (default: llm_summaries_archive_with_title.csv)")
+                        default="llm_summaries_archive_with_dynamic_title.csv", 
+                        help="Path to the output CSV file for summaries (default: llm_summaries_archive_with_dynamic_title.csv)")
 
     args = parser.parse_args()
     process_and_summarize_clustered_news(args.input_clustered_csv, args.output_summary_csv)
