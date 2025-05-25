@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 import os
 import glob
-
-# Find all .env files in the current directory
-env_files = glob.glob("*.env")
+config_dir = "./dag_lib/model_registry"
+# # Find all .env files in the current directory
+env_files = glob.glob(os.path.join(config_dir, "*.env"))
 
 if env_files:
     # Load the first .env file found
@@ -11,6 +11,7 @@ if env_files:
     load_dotenv(dotenv_path=env_files[0])
 else:
     print("No .env file found.")
+# load_dotenv(dotenv_path="example.env")
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 EXPERIMENT_NAME = os.getenv("EXPERIMENT_NAME")

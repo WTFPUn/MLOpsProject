@@ -1,8 +1,6 @@
 
 from datetime import datetime, timedelta
 import os, subprocess, json, pickle, boto3
-import sys
-sys.path.append("/lib")
 
 from airflow.operators.python import PythonVirtualenvOperator
 from airflow import DAG
@@ -49,10 +47,11 @@ with DAG(
 
     def get_model(csv_file: str):
         import sys
-        sys.path.append("/lib")
+        sys.path.append("/opt/airflow/dag_lib")
+        sys.path.append("/opt/airflow/dag_lib/model_registry")
         print("getting model from registry...")
-        from lib.model_registry.modules.registry import get_current_model
-        repo_name, _ , _= get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score", "MINIMIZE")
+        from model_registry.modules.registry import get_current_model
+        repo_name, _ , _= get_current_model("Vector_Prediction_Viz", "calinski_harabasz_score", "MINIMIZE")
         print(f"found {repo_name} on production")
         return {
             "csv_file": csv_file,

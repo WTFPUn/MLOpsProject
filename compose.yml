@@ -32,7 +32,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
-    - ${AIRFLOW_PROJ_DIR:-.}/lib:/opt/airflow/lib
+    - ${AIRFLOW_PROJ_DIR:-.}/dag_lib:/opt/airflow/dag_lib
     - ${AIRFLOW_PROJ_DIR:-.}/result:/opt/airflow/result
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
@@ -308,7 +308,7 @@ services:
       - "5000:5000"
     volumes:
       # - ./mlruns:/mlflow/mlruns
-      - ./lib/model_registry/mlruns:/mlruns
+      - ./dag_lib/model_registry/mlruns:/mlruns
     environment:
       - MLFLOW_TRACKING_URI=http://0.0.0.0:5000
     command: >
