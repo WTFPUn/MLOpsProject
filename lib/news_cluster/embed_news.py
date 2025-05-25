@@ -36,7 +36,7 @@ def embed_colbert(input_csv_path, model_name = 'BAAI/bge-m3'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Embed daily news using ColBERT vectors.")
-    parser.add_argument("input_csv", help="Path to the input CSV file (e.g., news_140525.csv)")
+    parser.add_argument(default="input_csv", type=str, help="Path to the input CSV file (e.g., news_140525.csv)")
 
     args = parser.parse_args()
     embed_colbert(args.input_csv)

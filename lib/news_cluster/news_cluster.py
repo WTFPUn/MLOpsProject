@@ -45,8 +45,8 @@ def cluster_colbert_vectors(input_folder, output_csv, as_folder = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cluster ColBERT embeddings using mean pooling + UMAP + DBSCAN.")
-    parser.add_argument("--input_folder", default="./embed_vector", help="Folder containing .pkl files (default: ./embed_vector)")
-    parser.add_argument("--output_csv", default="news_clustered.csv", help="Output CSV file (default: colbert_clustered.csv)")
+    parser.add_argument("--input_folder", type=str, default="./embed_vector", help="Folder containing .pkl files (default: ./embed_vector)")
+    parser.add_argument("--output_csv",  type=str, default="news_clustered.csv", help="Output CSV file (default: colbert_clustered.csv)")
 
     args = parser.parse_args()
     cluster_colbert_vectors(args.input_folder, args.output_csv)
