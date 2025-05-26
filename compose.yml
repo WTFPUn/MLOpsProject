@@ -304,6 +304,20 @@ services:
       mlflow server
       --host 0.0.0.0
 
+  gradio:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: gradio_app
+    ports:
+      - "7860:7860"
+    depends_on:
+      - redis
+    environment:
+      - ENV_FILE=.env
+    networks:
+      - backend
+
 volumes:
   postgres-db-volume:
 
