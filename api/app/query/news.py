@@ -8,7 +8,7 @@ from redis import Redis
 
 redis = Redis(host='redis', port=6379, db=0,decode_responses=True)
 
-__all__ = ["query_news", "store_news"]
+__all__ = ["query_news", "store_news", "get_news_by_date"]
 
 def get_start_of_week(date: datetime) -> datetime:
     start_of_week = date - timedelta(days=date.weekday())
@@ -107,3 +107,23 @@ async def store_news(
         print(f"Error storing news article: {e}")
         await db.disconnect()
         return False
+    
+async def get_news_by_date(date: datetime):
+    """
+    Get the news ID for a given date.
+    """
+    db = Prisma()
+    
+    await db.connect()
+    
+    start_of_week = get_start_of_week(date)
+    
+    news_article = await db.news.find_many(
+        where={
+            "startDate": date_parser(start_of_week),
+        },
+    )
+    
+    await db.disconnect()
+    
+    return news_article

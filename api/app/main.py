@@ -5,11 +5,11 @@ from prometheus_client import Counter, Histogram, generate_latest
 from fastapi.responses import Response as FastAPIResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
-
+from datetime import datetime
 import json
 
-from models import News
-from query import query_news, store_news
+from models import News, GetClusterNames
+from query import query_news, store_news, get_news_by_date
 
 app = FastAPI()
 
@@ -70,7 +70,34 @@ async def post_news(request: Request):
     with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
         return FastAPIResponse(content='{"status": "ok"}', media_type="application/json", status_code=status_code)
 
+@app.get("/getclusternames")
+async def get_cluster_names(dt_str: str):
+    """
+    Get cluster names for a given date(yyyy-mm-dd).
+    """
+    try:
+        dt = datetime.strptime(dt_str, "%Y-%m-%d").date()
 
+        # Now you can use strftime
+        formatted_date = dt.strftime("%Y-%m-%d")
+    except ValueError:
+        status_code = 400
+        REQUEST_COUNTER.labels(endpoint="/getclusternames", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/getclusternames", status_code=str(status_code)).time():
+            return FastAPIResponse(content='{"error": "Invalid date format"}', media_type="application/json", status_code=status_code)
+
+    news = await get_news_by_date(date=dt)
+    if news is None:
+        status_code = 404
+        REQUEST_COUNTER.labels(endpoint="/getclusternames", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/getclusternames", status_code=str(status_code)).time():
+            return FastAPIResponse(content='{"error": "No news found"}', media_type="application/json", status_code=status_code)
+
+    status_code = 200
+    REQUEST_COUNTER.labels(endpoint="/getclusternames", status_code=str(status_code)).inc()
+    with REQUEST_LATENCY.labels(endpoint="/getclusternames", status_code=str(status_code)).time():
+        return FastAPIResponse(content=GetClusterNames(data=news).model_dump_json(), media_type="application/json", status_code=status_code)
+    
 @app.get("/metrics")
 def metrics():
     return FastAPIResponse(generate_latest(), media_type="text/plain")
@@ -78,3 +105,4 @@ def metrics():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
