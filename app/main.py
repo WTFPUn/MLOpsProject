@@ -65,7 +65,7 @@ with gr.Blocks() as demo:
     file_id = gr.State(None)
     
     def query_groups(filter_value):
-        url = "http://127.0.0.1:8000/getclusternames"  # Replace with your actual URL if different
+        url = "http://host.docker.internal:8000/getclusternames"  # Replace with your actual URL if different
         response = requests.get(url, params={"dt_str": filter_value})
         if response.status_code != 200:
             gr.Error(f"Error {response.status_code}: {response.json()}")
@@ -127,4 +127,4 @@ with gr.Blocks() as demo:
     query_btn.click(fn=update_group_cards, inputs=dropdown, outputs=[group_cards, data])
     group_cards.change(fn=show_group_info, inputs=[group_cards, dropdown], outputs=[group_info, table, download])
 
-demo.launch()
+demo.launch(server_name="0.0.0.0")
