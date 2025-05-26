@@ -5,3 +5,4 @@ class News(BaseModel):
     title: str
     content: str
     date: datetime
+    cluster: int

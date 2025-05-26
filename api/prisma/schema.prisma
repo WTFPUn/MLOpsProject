@@ -10,14 +10,16 @@ generator client {
 
 model News {
     id        Int      @id @default(autoincrement())
+    cluster   Int
     title     String   @db.VarChar(255)
     content   String   @db.Text
-    startDate DateTime @unique @db.Date
+    startDate DateTime @db.Date
 }
 
 model NewsTest {
     id        Int      @id @default(autoincrement())
+    cluster   Int
     title     String   @db.VarChar(255)
     content   String   @db.Text
-    startDate DateTime @unique @db.Date
+    startDate DateTime @db.Date
 }

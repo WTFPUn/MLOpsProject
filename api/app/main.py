@@ -6,6 +6,8 @@ from fastapi.responses import Response as FastAPIResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
+import json
+
 from models import News
 from query import query_news, store_news
 
@@ -42,8 +44,8 @@ async def get_news(date: Optional[date] = None, test: Optional[bool] = False):
     status_code = 200
     REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
     with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
-        return FastAPIResponse(content=news.model_dump_json(), media_type="application/json", status_code=status_code)
-
+        # return FastAPIResponse(content={"data": [i.model_dump_json() for i in news]}, media_type="application/json", status_code=status_code)
+        return FastAPIResponse(content=json.dumps([i.model_dump_json() for i in news]), media_type="application/json", status_code=status_code)
 
 
 @app.post("/news")
@@ -57,7 +59,7 @@ async def post_news(request: Request):
         with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
             return FastAPIResponse(content='{"error": "Invalid data"}', media_type="application/json", status_code=status_code)
     
-    result = await store_news(title=news.title, content=news.content, date=news.date)
+    result = await store_news(title=news.title, content=news.content, date=news.date, cluster=news.cluster)
     if not result:
         status_code = 500
         REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
