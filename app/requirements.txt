@@ -1,2 +1,5 @@
 gradio
 requests
+pandas
+boto3
+dotenv
