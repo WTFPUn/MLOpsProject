@@ -5,6 +5,7 @@ from datetime import datetime
 news_data = {
     "title": "Sample News Title",
     "content": "This is a sample news description.",
+    "cluster": 0,
     "date": datetime.now().isoformat()  # Use ISO format for date
 }
 
