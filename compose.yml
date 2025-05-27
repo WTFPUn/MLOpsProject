@@ -32,7 +32,6 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/data:/opt/airflow/data
-    - ${AIRFLOW_PROJ_DIR:-.}/dag_lib:/opt/airflow/dag_lib
     - ${AIRFLOW_PROJ_DIR:-.}/result:/opt/airflow/result
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
@@ -321,6 +320,12 @@ services:
       - ENV_FILE=.env
     networks:
       - backend
+  
+  airflow-python:
+    build:
+      context: ./dag_lib/python
+      dockerfile: Dockerfile
+    container_name: airflow-python
 
 volumes:
   postgres-db-volume:
