@@ -1,10 +1,9 @@
-
-from datetime import datetime, timedelta
-import os, boto3
-
 from airflow import DAG
 from airflow.decorators import task
 from airflow.models import Variable
+
+from datetime import datetime, timedelta
+import os
 
 AWS_REGION         = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
 GEMMA_MODEL_PATH   = ""
@@ -52,6 +51,7 @@ with DAG(
   
   @task()
   def upload_to_s3(csv_file: str = ''):
+    import boto3
     s3 = boto3.client("s3")
     current_date = datetime.now()
     try:
@@ -63,6 +63,7 @@ with DAG(
       
   @task()
   def download_from_s3():
+    import boto3
     s3 = boto3.client("s3")
     current_date = datetime.now()
     try:

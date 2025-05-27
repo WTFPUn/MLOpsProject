@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow.operators.python import PythonVirtualenvOperator
 
 # to Read requirements from file place the file in dag folder and use as this part specify
-with open('/opt/airflow/dags/airflow-requirements.txt') as f:
+with open('/opt/airflow/dags/requirements.txt') as f:
     requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
 def print_sklearn_version():
