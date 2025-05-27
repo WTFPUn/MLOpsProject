@@ -1,0 +1,12 @@
+scikit-learn==1.6.1
+mlflow==2.22.0
+matplotlib
+seaborn
+pandas
+numpy
+# transformers==4.51.3
+# huggingface-hub==0.30.2
+# essential
+# FlagEmbedding
+# datasets
+# sentence-transformers==4.1.0
