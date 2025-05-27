@@ -21,22 +21,35 @@ default_args = {
 with DAG(
     dag_id              = "inference_pipeline",
     start_date          = datetime(2024, 1, 1),
-    schedule_interval   = "0 0 * * *",
+    schedule_interval   = "30 0 * * 0",
     catchup             = False,
     default_args        = default_args,
     max_active_runs     = 1,
     tags                = ["news", "nlp", "topic-model"],
 ):
     
-    def load_data():
-        print("loading data...")
-        # TODO: implement this
-        # get time range from request
-        # query news dfrom S3 base on the time range
-        # save to csv file
+    def get_start_of_week(date: datetime) -> datetime:
+        start_of_week = date - timedelta(days=date.weekday())      
+        return start_of_week
 
-        # Simulate returning a CSV path
-        return "/data/thairath_month.csv"
+    def date_parser(dt: datetime) -> datetime:    
+      return datetime.combine(dt.date(), datetime.min.time())
+    
+    @task()
+    def load_data_from_s3():
+        print("Setting up S3 client and paths")
+        s3 = boto3.client("s3")
+        current_date = datetime.now()
+        try:
+          print(f"Downloading file from S3: news_week_{date_parser(get_start_of_week(current_date))}.csv")
+          s3.download_file("kmuttcpe393datamodelnewssum",
+          f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv",
+          f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+          csv_file = f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv"
+          print(f"✅ S3 file downloaded to: {csv_file}")
+        except Exception as e:
+          print(f"❌ S3 download failed: {e}")
+        return csv_file
 
     load_data_task = PythonVirtualenvOperator(
         task_id="load_data_from_s3",
@@ -103,5 +116,11 @@ with DAG(
         python_version="3.10",
     )
 
-    # Set task dependencies
-    load_data_task >> get_model_task >> topic_model_task >> summarise_task >> store_summary_task
+    # Task chaining with proper passing
+    csv_file = load_data_from_s3()
+    model_info = get_embedding_model(csv_file)
+    clustered_file = topic_modelling(model_info)
+    summarized = summarise_topics(clustered_file)
+    store_s3 = store_summaries(summarized)
+    
+    csv_file >> model_info >> clustered_file >> summarized >> store_s3

@@ -8,7 +8,7 @@ from redis import Redis
 
 redis = Redis(host='redis', port=6379, db=0,decode_responses=True)
 
-__all__ = ["query_news", "store_news"]
+__all__ = ["query_news", "store_news", "get_news_by_date"]
 
 def get_start_of_week(date: datetime) -> datetime:
     start_of_week = date - timedelta(days=date.weekday())
@@ -20,9 +20,9 @@ def date_parser(dt: datetime) -> datetime:
     Parse a datetime object to a date object.
     """
     
-    return datetime.combine(dt.date(), datetime.min.time())
+    return datetime.combine(dt, datetime.min.time())
 
-async def query_news(date: Optional[datetime] = None, test: Optional[bool]= False) -> Optional[News]:
+async def query_news(date: Optional[datetime] = None, test: Optional[bool]= False) -> List[News]:
     """
     Fetch news articles from the database.
     If a date is provided, it will return news articles for that date.
@@ -39,20 +39,34 @@ async def query_news(date: Optional[datetime] = None, test: Optional[bool]= Fals
 
     db = Prisma()
     await db.connect()
-    
+        
     if test:
-        news_article = await db.newstest.find_first(order={"id": "desc"})
+        news_article = await db.newstest.find_many(
+            order={
+                "cluster": "asc",
+            },
+            where={
+                "startDate": date_parser(get_start_of_week(datetime.now())),
+            },
+        )
         
         await db.disconnect()
         return news_article
     print(f"Date: {date}")
     if date is None:
-        news_article = await db.news.find_first(order={"id": "desc"})
+        news_article = await db.news.find_many(
+            order={
+                "cluster": "asc",
+            },
+            where={
+                "startDate": date_parser(get_start_of_week(datetime.now())),
+            },
+        )
     else:
         start_of_week = get_start_of_week(date)
         print(f"Start of week: {start_of_week} of {date}")
         
-        news_article = await db.news.find_first(
+        news_article = await db.news.find_many(
             where={
                 "startDate": date_parser(start_of_week),
             },
@@ -65,6 +79,7 @@ async def store_news(
     title: str,
     content: str,
     date: datetime,
+    cluster: int
 ) -> bool:
     """
     Store a news article in the database.
@@ -79,6 +94,7 @@ async def store_news(
                 "title": title,
                 "content": content,
                 "startDate": date_parser(get_start_of_week(date)),
+                "cluster": cluster,
             },
         )
         
@@ -91,3 +107,23 @@ async def store_news(
         print(f"Error storing news article: {e}")
         await db.disconnect()
         return False
+    
+async def get_news_by_date(date: datetime):
+    """
+    Get the news ID for a given date.
+    """
+    db = Prisma()
+    
+    await db.connect()
+    
+    start_of_week = get_start_of_week(date)
+    
+    news_article = await db.news.find_many(
+        where={
+            "startDate": date_parser(start_of_week),
+        },
+    )
+    
+    await db.disconnect()
+    
+    return news_article

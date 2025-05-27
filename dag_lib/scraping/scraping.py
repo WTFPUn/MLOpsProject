@@ -1,4 +1,4 @@
-import requests, json, re, boto3
+import requests, json, re
 from bs4 import BeautifulSoup
 from collections import deque
 from datetime import datetime
@@ -15,12 +15,53 @@ HEADERS  = {
 }
 DATE_RE  = re.compile(r"\d{1,2}\s[ก-๙]+\.\s\d{4}\s\d{1,2}:\d{2}")
 
-def upload_to_s3(file_name, bucket_name, object_name=None):
-    s3 = boto3.client("s3")
-    try:
-        s3.upload_file(file_name, bucket_name, object_name or file_name)
-    except Exception as e:
-        print(f"❌ S3 upload failed: {e}")
+def yield_weekly_links(news_tag: str, filter: str, seen: set[str]):
+    page = 1
+    while True:
+        url = f"{BASE_URL}/news/{news_tag}/all-latest?filter={filter}&page={page}"
+        print(f"🔄 Fetching {url} …")
+
+        html   = requests.get(url, headers=HEADERS, timeout=15).text
+        soup   = BeautifulSoup(html, "html.parser")
+        script = soup.find("script", id="__NEXT_DATA__")
+        if script is None:                          # page structure changed?
+            print("❌  __NEXT_DATA__ not found")
+            break
+
+        data = json.loads(script.string)
+
+        # the list of stories lives in two possible branches;
+        # 'news' is present on section pages, 'common' on some others
+        try:
+            items = data["props"]["initialState"]["news"]["data"]["items"]
+        except KeyError:
+            items = data["props"]["initialState"]["common"]["data"]["items"]
+
+        if not items:                               # reached the end
+            break
+
+        fresh = 0
+        for it in items:
+            # prefer canonical; fall back to fullPath and make it absolute
+            print(f"  • {it.get('title', '').strip()} → {it.get('canonical', '') or it.get('fullPath', '')}")
+            link  = it.get("fullPath", "")
+            title = it.get("title", "").strip()
+
+            if not link or link in seen:
+                continue
+            seen.add(link)
+            fresh += 1
+            yield title, link
+
+        # stop early if this page gave nothing new
+        if fresh == 0:
+            break
+
+        # or stop when we hit the last page, which you can read from the blob too
+        max_page = data["props"]["initialState"]["common"]["data"]["page"]["max"]
+        if page >= max_page:
+            break
+        page += 1
 
 
 def bfs_find(obj, want):
@@ -118,33 +159,34 @@ def scrape_article_details(url: str):
         print(f"❌ Failed {url}\n   {e}")
         return "N/A", "N/A", "N/A"
 
-def scrape_thairath(outpath: str = None):
-    print("🔄 Fetching News")
-    soup = BeautifulSoup(requests.get(NEWS_URL, headers=HEADERS).text, "html.parser")
+def scrape_thairath(outpath: str | None = None,
+                    tags: list[str] = None):
+    if tags is None:
+        # pick the sections you care about – add/remove at will
+        tags = ["local", "society", "politic"]
+
+    print("🔄 Fetching ThaiRath weekly archive …")
     articles, seen = [], set()
 
-    for a in soup.select("a[href^='/news/']"):
-      title, link = a.get("title"), a.get("href")
-      if not title or not link or link in seen:
-        continue
-      seen.add(link)
-      full = BASE_URL + link
-      publishdate, contents, tags = scrape_article_details(full)
-      timestamp = datetime.now().isoformat()
+    for tag in tags:
+        print(f"  • {tag}")
+        for title, link in yield_weekly_links(tag, "7", seen):
+            full_url = BASE_URL + '/' + link
+            pub, body, tag_list = scrape_article_details(full_url)
+            articles.append({
+                "title":      title,
+                "url":        full_url,
+                "scraped_at": datetime.now().isoformat(),
+                "published":  pub,
+                "content":    body,
+                "tags":       tag_list,
+            })
 
-
-      articles.append({
-        "title":      title,
-        "url":        full,
-        "scraped_at": timestamp,
-        "published":  publishdate,
-        "content":    contents,
-        "tags":       tags,
-      })
+    df = pd.DataFrame(articles)
     if outpath:
-      print(f"🔄 Saving to {outpath} …")
-      df = pd.DataFrame(articles)
-      df.to_csv(outpath, index=False, encoding="utf-8-sig")
-    else:      
-      df = pd.DataFrame(articles)
-      df.to_csv(f"{timestamp}.csv", index=False)
+        df.to_csv(outpath, index=False, encoding="utf-8-sig")
+        print(f"✅ Saved {len(df)} rows → {outpath}")
+    else:
+        fname = f"thairath_{datetime.now():%Y%m%dT%H%M}.csv"
+        df.to_csv(fname, index=False, encoding="utf-8-sig")
+        print(f"✅ Saved {len(df)} rows → {fname}")
