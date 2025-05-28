@@ -269,6 +269,8 @@ with DAG(
         import json
         import pandas as pd
         import ast
+        import json
+        import requests
         
         # input_data = ast.literal_eval(input_data)
         # print(input_data)
@@ -287,20 +289,49 @@ with DAG(
     
         print("to_return: ", to_return)
         print("csv_return: ", csv_return)
+        print(len(csv_return))
         
         s3 = boto3.client("s3")
         current_date = datetime.now()
         print(current_date)
         try:
-            csv_bytes = io.BytesIO()
-            df.to_csv(csv_bytes, index=False)
-            s3.upload_file(csv_bytes, "kmuttcpe393datamodelnewssum",
-            f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv"
-            )
+            # csv_bytes = io.BytesIO()
+            # df.to_csv(csv_bytes, index=False)
+            # s3.upload_file(csv_bytes, "kmuttcpe393datamodelnewssum",
+            # f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv"
+            # )
             
+            for i, csv_df in enumerate(csv_return):
+                sum_name = f"{i}.csv"
+                csv_df.to_csv(sum_name)
+                print(sum_name)
+                s3.upload_file(
+                    sum_name,
+                    "kmuttcpe393datamodelnewssum",
+                    f"cluster/{date_parser(get_start_of_week(current_date)).strftime('%Y-%m-%d')}/"+sum_name
+                )
+                
         except Exception as e:
             print(f"❌ S3 upload failed: {e}")
         
+        for record in to_return:
+            payload = {
+                "title": record["title"],
+                "cluster": record["cluster_id"],
+                "content": record["summarized_news"],
+                # parse date from string to datetime
+                "date": datetime.strptime(record["date"], "%Y-%m-%d").isoformat()
+            }
+            response = requests.post("http://fastapi_app:8000/news", json=payload)
+
+            if response.status_code != 201:
+                print(f"Failed to upload record: {response.status_code} - {response.text}")
+            else:
+                print(f"Successfully uploaded record: {record['title']}")
+        print("All records processed and uploaded successfully.")
+        
+        
+            
     store_summary_task = PythonVirtualenvOperator(
         task_id="store_summaries",
         python_callable=upload_to_s3,

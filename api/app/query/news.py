@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from redis import Redis
 
-redis = Redis(host='redis', port=6379, db=0,decode_responses=True)
+redis = Redis(host='host.docker.internal', port=6379, db=0,decode_responses=True)
 
 __all__ = ["query_news", "store_news", "get_news_by_date"]
 
