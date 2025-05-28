@@ -12,18 +12,22 @@ def check_embedding(debug = False):
     client = mlflow.tracking.MlflowClient()
     model_name, current_log_version, exp_info = get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score")
     runs = get_runs_with_same_param_value(model_name, exp_info)
+    runs = runs.dropna(subset="metrics.calinski_harabasz_score")
 
     # if this is first version terminate
     if len(runs)<2:
         print("only 1 model existed")
         exit()
 
+    print("checking score of both runs")
     latest_records = runs.sort_values(by="end_time", ascending=False).head(2)
+    print(latest_records)
     score = latest_records["metrics.calinski_harabasz_score"].values
     current_score = score[0]
     # Higher CH score → better cluster separation (good embedding). diff (+)
     # Lower CH score → more overlapping or compact clusters (bad embedding or potential drift). diff (-)
     diff = current_score - score[1]
+    print(f"found different: {diff}")
     # the performance decrease
     if diff < 0:
         if debug:
