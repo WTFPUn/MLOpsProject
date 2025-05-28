@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from collections import deque
 from datetime import datetime
 import pandas as pd
+from datetime import datetime, timedelta
 
 BASE_URL = "https://www.thairath.co.th"
 NEWS_URL = f"{BASE_URL}/news/"
@@ -190,3 +191,10 @@ def scrape_thairath(outpath: str | None = None,
         fname = f"thairath_{datetime.now():%Y%m%dT%H%M}.csv"
         df.to_csv(fname, index=False, encoding="utf-8-sig")
         print(f"✅ Saved {len(df)} rows → {fname}")
+
+def get_start_of_week(date: datetime) -> datetime:
+    start_of_week = date - timedelta(days=date.weekday())      
+    return start_of_week
+
+def date_parser(dt: datetime) -> datetime:    
+    return datetime.combine(dt.date(), datetime.min.time())

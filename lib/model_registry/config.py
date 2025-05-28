@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 import glob
-config_dir = "./dag_lib/model_registry"
+config_dir = "./lib/model_registry"
 # # Find all .env files in the current directory
 env_files = glob.glob(os.path.join(config_dir, "*.env"))
 
