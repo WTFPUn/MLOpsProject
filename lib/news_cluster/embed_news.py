@@ -39,10 +39,13 @@ class Embeder:
 
         df["colbert_vecs"] = colbert_vecs
 
-        # Create output filename
-        base_name = os.path.basename(input_csv_path).replace(".csv", "")
-        os.makedirs("embed_vector", exist_ok=True)
-        output_pkl_path = f"./embed_vector/{base_name}.pkl"
+        if api:
+            output_pkl_path = f"./embed.pkl"
+        else:
+            # Create output filename
+            base_name = os.path.basename(input_csv_path).replace(".csv", "")
+            os.makedirs("embed_vector", exist_ok=True)
+            output_pkl_path = f"./embed_vector/{base_name}.pkl"
 
         print(f"💾 Saving to: {output_pkl_path}")
         with open(output_pkl_path, "wb") as f:

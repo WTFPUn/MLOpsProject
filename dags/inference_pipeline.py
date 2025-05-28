@@ -16,7 +16,7 @@ if dotenv_path:
 EXPERIMENT_NAME    = "Vector_Prediction_Viz"
 AWS_REGION         = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
 GEMMA_MODEL_PATH   = ""
-API_ENDPOINT         = os.getenv("API_ENDPOINT", "ap-southeast-1")
+API_ENDPOINT         = os.getenv("API_ENDPOINT")
 
 default_args = {
     "owner":           "SuperAIAinsurance",
@@ -84,6 +84,8 @@ with DAG(
     )
 
     def get_topic_embedding(input_data: dict):
+        import os
+        API_ENDPOINT = os.getenv("API_ENDPOINT")
         import ast
         input_data = ast.literal_eval(input_data)
         print("Topic modelling...")
@@ -105,7 +107,8 @@ with DAG(
         # ✅ Step 3: Send to FastAPI using multipart/form-data
         response = requests.post(
             f"{API_ENDPOINT}/embed/",
-            files={"file": ("input.csv", csv_bytes, "text/csv")}
+            files={"file": ("input.csv", csv_bytes, "text/csv")},
+            data={"repo_name": repo_name}  
         )
 
         # ✅ Step 4: Handle response
@@ -123,7 +126,7 @@ with DAG(
         task_id="get_topic_embedding",
         python_callable=get_topic_embedding,
         op_args=["{{ ti.xcom_pull(task_ids='get_embedding_model') }}"],
-        requirements=["argparse","FlagEmbedding==1.3.4","transformers==4.51.3","pandas"],
+        requirements=["pandas"],
         python_version="3.10",
     )
 
