@@ -100,22 +100,30 @@ with DAG(
         print(clustered_file)
 
         # ✅ Step 1: Create or have a DataFrame
-        df = pd.read_csv(clustered_file)
+        df = pd.read_csv(clustered_file).sample(20)
+
+        print(df)
 
         # ✅ Step 2: Convert DataFrame to CSV bytes
         csv_bytes = io.BytesIO()
         df.to_csv(csv_bytes, index=False)
         csv_bytes.seek(0)
 
-        # ✅ Step 3: Send to FastAPI using multipart/form-data
+        # # ✅ Step 3: Send to FastAPI using multipart/form-data
         response = requests.post(
             f"{API_ENDPOINT}/embed/",
             files={"file": ("input.csv", csv_bytes, "text/csv")},
-            data={"repo_name": repo_name}  
+            data={"repo_name": repo_name},
         )
 
+        # import base64
+
+        # res_json = response.json()
+        # with open("embedding_output.pkl", "wb") as f:
+        #     f.write(base64.b64decode(res_json["content"]))
+
         # # ✅ Step 4: Handle response
-        with open("embedding_output.pkl", "wb") as f:
+        with open("embedding_output.csv", "wb") as f:
             f.write(response.content)
         print("Processed CSV saved.")
 
@@ -123,7 +131,7 @@ with DAG(
         # embedding = embed_colbert(clustered_file, repo_name)
         # print(embedding)
         # from lib.news_cluster.embed_news 
-        return "embedding_output.pkl"
+        return "embedding_output.csv"
 
     embed_task = PythonVirtualenvOperator(
         task_id="get_topic_embedding",
