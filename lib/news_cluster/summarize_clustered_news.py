@@ -1,5 +1,8 @@
 # summarize_clustered_news.py
-
+import torch
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
 import argparse
 import pandas as pd
 import torch
@@ -34,14 +37,14 @@ def initialize_llm_model_and_pipeline():
             model = AutoModelForCausalLM.from_pretrained(
                 MODEL_ID,
                 device_map="auto",
-                torch_dtype=torch.bfloat16, # or torch.float16
+                # torch_dtype=torch.bfloat16, # or torch.float16
                 # load_in_4bit=True, # Optional: for 4-bit quantization
             )
             LLM_PIPELINE = pipeline(
                 "text-generation",
                 model=model,
                 tokenizer=LLM_TOKENIZER,
-                torch_dtype=torch.bfloat16, # or torch.float16
+                # torch_dtype=torch.bfloat16, # or torch.float16
                 device_map="auto",
             )
             print("LLM model and pipeline initialized successfully.")
