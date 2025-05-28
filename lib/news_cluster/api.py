@@ -133,12 +133,13 @@ async def embed(file: UploadFile = File(...), repo_name: str = Form(...)):
 @app.post("/summarize-news/")
 async def summarize(file: UploadFile = File(...), output_path: str = Form(...)):
     # ✅ Step 1: Read uploaded pickle file into a DataFrame
-    df = pd.read_pickle(file.file)
+    # df = pd.read_pickle(file.file)
+    df = pd.read_csv(file.file)
 
     # ✅ Step 2: Do processing (optional, plug in your own logic)
     # Example: Maybe reverse your embedding here?
     process_and_summarize_clustered_news(df, output_path)
-    
+
     # ✅ Step 3: Return CSV file
     output = io.StringIO()
     df.to_csv(output, index=False)

@@ -143,58 +143,97 @@ with DAG(
         python_version="3.10",
     )
 
-    # def summarise(cluster_file: str):
-    #     print(f"Summarising topics... on {cluster_file}")
-    #     summarized_text = f"Summarized: {cluster_file}"
-    #     import io
-    #     import pandas as pd
-    #     import requests
+    def summarise(cluster_file: str):
+        print(f"Summarising topics... on {cluster_file}")
+        summarized_text = "summarized_text.csv"
+        import os
+        import requests
 
-    #     # ✅ Step 1: Create or have a DataFrame
-    #     df = pd.read_csv(cluster_file)
+        API_ENDPOINT = os.getenv("API_ENDPOINT")
+        DEMO_N_CLUSTER = os.getenv("DEMO_N_CLUSTER")
 
-    #     # ✅ Step 2: Convert DataFrame to CSV bytes
-    #     csv_bytes = io.BytesIO()
-    #     df.to_csv(csv_bytes, index=False)
-    #     csv_bytes.seek(0)
+        import io
+        import pandas as pd
 
-    #     # ✅ Step 3: Send to FastAPI using multipart/form-data
-    #     response = requests.post(
-    #         f"{API_ENDPOINT}/embed/",
-    #         files={"file": ("input.csv", csv_bytes, "text/csv")}
-    #     )
+        # ✅ Step 1: Create or have a DataFrame
+        df = pd.read_csv(cluster_file)
 
+        # loop sent cluster
+        summarized_texts =[]
+        unique_cluster_ids = sorted(df['cluster'].unique())
+        l = min(len(unique_cluster_ids),int(DEMO_N_CLUSTER))
 
-    #     return summarized_text
-
-    # summarise_task = PythonVirtualenvOperator(
-    #     task_id="summarise_topics",
-    #     python_callable=summarise,
-    #     op_args=["{{ ti.xcom_pull(task_ids='topic_modelling') }}"],
-    #     requirements=[],
-    #     python_version="3.10",
-    # )
+        print(f"Summarising {l} topics...")
+        for cluster_id_val in unique_cluster_ids[:l+1]:
+            if cluster_id_val == -1:
+                print("skip individual cluster")
+                continue
+            target_df = df[df["cluster"] == cluster_id_val]
 
 
-    # def upload_to_s3(csv_file: str = ''):
-    #     import boto3
-    #     from datetime import datetime
-    #     from lib.scraping.scraping import date_parser, get_start_of_week
-    #     s3 = boto3.client("s3")
-    #     current_date = datetime.now()
-    #     try:
-    #         s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
-    #         f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv")
-    #     except Exception as e:
-    #         print(f"❌ S3 upload failed: {e}")
+            # ✅ Step 2: Convert DataFrame to CSV bytes
+            csv_bytes = io.BytesIO()
+            target_df.to_csv(csv_bytes, index=False)
+            csv_bytes.seek(0)
+
+            # ✅ Step 3: Send to FastAPI using multipart/form-data
+            response = requests.post(
+                f"{API_ENDPOINT}/summarize-news/",
+                files={"file": ("input.csv", csv_bytes, "text/csv")},
+                data={"output_path": summarized_text}  
+            )
+
+            # Check for response status
+            if response.status_code != 200:
+                print("Request failed:", response.status_code)
+                print("Response text:", response.text)
+                raise Exception("Request to summarize-news failed.")
+
+            response_df = pd.read_csv(io.BytesIO(response.content))
+            summarized_texts.append(response_df)
+            print(f"successfully summarized cluster {cluster_id_val}")
+
+        # Save the returned CSV
+        all_df = pd.concat(summarized_texts)
+        all_df.to_csv(summarized_text)
+        # with open(summarized_text, "wb") as f:
+        #     f.write(response.content)
+        # with open(cluster_file, "rb") as f:
+        #     response = requests.post(
+        #         f"{API_ENDPOINT}/summarize-news/",
+        #         files={"file": ("input.pkl", f, "application/octet-stream")},
+        #         data={"output_path": summarized_text}
+        #     )
+
+        return summarized_text
+
+    summarise_task = PythonVirtualenvOperator(
+        task_id="summarise_topics",
+        python_callable=summarise,
+        op_args=["{{ ti.xcom_pull(task_ids='topic_modelling') }}"],
+        requirements=["pandas"],
+        python_version="3.10",
+    )
+
+    def upload_to_s3(csv_file: str = ''):
+        import boto3
+        from datetime import datetime
+        from lib.scraping.scraping import date_parser, get_start_of_week
+        s3 = boto3.client("s3")
+        current_date = datetime.now()
+        try:
+            s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
+            f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+        except Exception as e:
+            print(f"❌ S3 upload failed: {e}")
         
-    # store_summary_task = PythonVirtualenvOperator(
-    #     task_id="store_summaries",
-    #     python_callable=upload_to_s3,
-    #     op_args=["{{ ti.xcom_pull(task_ids='summarise_topics') }}"],
-    #     requirements=[],
-    #     python_version="3.10",
-    # )
+    store_summary_task = PythonVirtualenvOperator(
+        task_id="store_summaries",
+        python_callable=upload_to_s3,
+        op_args=["{{ ti.xcom_pull(task_ids='summarise_topics') }}"],
+        requirements=[],
+        python_version="3.10",
+    )
 
     # Task chaining with proper passing
     # csv_file = load_data_from_s3()
@@ -203,4 +242,4 @@ with DAG(
     # summarized = summarise_topics(clustered_file)
     # store_s3 = store_summaries(summarized)
     
-    load_data_task >> get_model_task >> embed_task >> topic_cluster_task#>> summarise_task#>> clustered_file >> summarized >> store_s3
+    # load_data_task >> get_model_task >> embed_task >> topic_cluster_task#>> summarise_task#>> clustered_file >> summarized >> store_s3

@@ -168,8 +168,8 @@ def process_and_summarize_clustered_news(input_csv_path, output_csv_path: str):
     """
     Main function to load clustered news, summarize each cluster, and export.
     """
-    summarizer_pipeline, tokenizer_for_llm = initialize_llm_model_and_pipeline()
-    if not summarizer_pipeline:
+    # LLM_PIPELINE, LLM_TOKENIZER = initialize_llm_model_and_pipeline()
+    if not LLM_PIPELINE:
         print("LLM initialization failed. Exiting.")
         return
 
@@ -195,6 +195,7 @@ def process_and_summarize_clustered_news(input_csv_path, output_csv_path: str):
     unique_cluster_ids = sorted(clustered_df['cluster'].unique())
 
     print(f"\n--- Starting News Summarization and Export to {output_csv_path} ---")
+    print(f"processing {len(unique_cluster_ids)} clusters...")
 
     for cluster_id_val in unique_cluster_ids:
         if cluster_id_val == -1:
@@ -233,7 +234,7 @@ def process_and_summarize_clustered_news(input_csv_path, output_csv_path: str):
             
         print(f"Summarizing text for cluster {cluster_id_val}...")
         # llm_output_full is the entire response from the LLM, should include summary and timeline
-        llm_output_full = summarize_news_cluster(combined_text_for_llm, summarizer_pipeline, tokenizer_for_llm)
+        llm_output_full = summarize_news_cluster(combined_text_for_llm, LLM_PIPELINE, LLM_TOKENIZER)
         
         # Extract the summary part for the dynamic title
         parsed_summary_only = parse_summary_from_llm_output(llm_output_full)
