@@ -55,7 +55,7 @@ with DAG(
         return csv_file
 
     load_data_task = PythonVirtualenvOperator(
-        task_id="load_data_from_s3",
+        task_id="load_data_s3",
         python_callable=load_data_from_s3,
         requirements=["boto3"],
         python_version="3.10",
@@ -78,7 +78,7 @@ with DAG(
     get_model_task = PythonVirtualenvOperator(
         task_id="get_embedding_model",
         python_callable=get_model,
-        op_args=["{{ ti.xcom_pull(task_ids='load_data_from_s3') }}"],
+        op_args=["{{ ti.xcom_pull(task_ids='load_data_s3') }}"],
         requirements=["mlflow"],
         python_version="3.10",
     )
@@ -144,6 +144,17 @@ with DAG(
     )
 
     def summarise(cluster_file: str):
+        from typing import TypedDict, List
+        import uuid
+        import json
+
+        class SummaryRecord(TypedDict):
+            title: str
+            cluster_id: int
+            summarized_news: str  # Full LLM output for the cluster
+            date: str
+
+            
         print(f"Summarising topics... on {cluster_file}")
         summarized_text = "summarized_text.csv"
         import os
@@ -162,7 +173,8 @@ with DAG(
         summarized_texts =[]
         unique_cluster_ids = sorted(df['cluster'].unique())
         l = min(len(unique_cluster_ids),int(DEMO_N_CLUSTER))
-
+        to_return = []
+        csv_return = []
         print(f"Summarising {l} topics...")
         for cluster_id_val in unique_cluster_ids[:l+1]:
             if cluster_id_val == -1:
@@ -170,11 +182,12 @@ with DAG(
                 continue
             target_df = df[df["cluster"] == cluster_id_val]
 
-
             # ✅ Step 2: Convert DataFrame to CSV bytes
             csv_bytes = io.BytesIO()
             target_df.to_csv(csv_bytes, index=False)
             csv_bytes.seek(0)
+            
+            csv_return.append(target_df)
 
             # ✅ Step 3: Send to FastAPI using multipart/form-data
             response = requests.post(
@@ -189,13 +202,19 @@ with DAG(
                 print("Response text:", response.text)
                 raise Exception("Request to summarize-news failed.")
 
-            response_df = pd.read_csv(io.BytesIO(response.content))
-            summarized_texts.append(response_df)
+            # response_df = pd.read_csv(io.BytesIO(response.content))
+            # summarized_texts.append(response_df)
+            if len(response.json()["data"]) == 0:
+                print(f"No data returned for cluster {cluster_id_val}, skipping...")
+                continue
+            response: List[SummaryRecord] = response.json()["data"][0]
+            print(f"Cluster {cluster_id_val} has {len(response)} records")           
+            to_return.append(response)
             print(f"successfully summarized cluster {cluster_id_val}")
 
         # Save the returned CSV
-        all_df = pd.concat(summarized_texts)
-        all_df.to_csv(summarized_text)
+        # all_df = pd.concat(summarized_texts)
+        # all_df.to_csv(summarized_text)
         # with open(summarized_text, "wb") as f:
         #     f.write(response.content)
         # with open(cluster_file, "rb") as f:
@@ -204,26 +223,70 @@ with DAG(
         #         files={"file": ("input.pkl", f, "application/octet-stream")},
         #         data={"output_path": summarized_text}
         #     )
-
-        return summarized_text
+        print(to_return)
+        
+        to_save = {
+            "df": df.to_dict(orient="records"),
+            "to_return": to_return,  # already list of dicts from API
+            "csv_return": [d.to_dict(orient="records") for d in csv_return]
+        }
+        serialized_data = json.dumps(to_save)
+        file_name = f"summarized_{uuid.uuid4()}.json"
+        with open(file_name, "w") as f:
+            f.write(serialized_data)
+        
+        return file_name
+        # return {
+        #     "df": df,
+        #     "to_return": to_return,
+        #     "csv_return": csv_return
+        # }
 
     summarise_task = PythonVirtualenvOperator(
         task_id="summarise_topics",
         python_callable=summarise,
         op_args=["{{ ti.xcom_pull(task_ids='topic_modelling') }}"],
-        requirements=["pandas"],
+        requirements=["pandas", "requests"],
         python_version="3.10",
     )
 
-    def upload_to_s3(csv_file: str = ''):
+    def upload_to_s3(filename: str):
         import boto3
         from datetime import datetime
+        import io
         from lib.scraping.scraping import date_parser, get_start_of_week
+        import json
+        import pandas as pd
+        import ast
+        
+        # input_data = ast.literal_eval(input_data)
+        # print(input_data)
+        # df = input_data["df"]
+        # to_return = input_data["to_return"]
+        # csv_return = input_data["csv_return"]
+        with open(filename, "r") as f:
+            input_data = json.load(f)
+        
+        df = input_data["df"]
+        to_return = input_data["to_return"]
+        csv_return = input_data["csv_return"]
+    
+        df = pd.DataFrame(df)
+        csv_return = [pd.DataFrame(x) for x in csv_return]
+    
+        print("to_return: ", to_return)
+        print("csv_return: ", csv_return)
+        
         s3 = boto3.client("s3")
         current_date = datetime.now()
+        print(current_date)
         try:
-            s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
-            f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+            csv_bytes = io.BytesIO()
+            df.to_csv(csv_bytes, index=False)
+            s3.upload_file(csv_bytes, "kmuttcpe393datamodelnewssum",
+            f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv"
+            )
+            
         except Exception as e:
             print(f"❌ S3 upload failed: {e}")
         
@@ -242,4 +305,4 @@ with DAG(
     # summarized = summarise_topics(clustered_file)
     # store_s3 = store_summaries(summarized)
     
-    # load_data_task >> get_model_task >> embed_task >> topic_cluster_task#>> summarise_task#>> clustered_file >> summarized >> store_s3
+    load_data_task >> get_model_task >> embed_task >> topic_cluster_task >> summarise_task >> store_summary_task#>> clustered_file >> summarized >> store_s3
