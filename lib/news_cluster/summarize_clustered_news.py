@@ -164,7 +164,7 @@ def export_summary_to_csv(dynamic_title: str, cluster_id: int, full_summarized_c
     except Exception as e:
         print(f"Error exporting to CSV '{csv_filename}': {e}")
 
-def process_and_summarize_clustered_news(input_csv_path: str, output_csv_path: str):
+def process_and_summarize_clustered_news(input_csv_path, output_csv_path: str):
     """
     Main function to load clustered news, summarize each cluster, and export.
     """
@@ -175,15 +175,18 @@ def process_and_summarize_clustered_news(input_csv_path: str, output_csv_path: s
 
     current_processing_date = date.today().strftime("%Y-%m-%d")
 
-    print(f"\n📥 Reading clustered news from: {input_csv_path}")
-    try:
-        clustered_df = pd.read_csv(input_csv_path)
-    except FileNotFoundError:
-        print(f"❌ Error: Input CSV file not found at {input_csv_path}")
-        return
-    except Exception as e:
-        print(f"❌ Error reading CSV {input_csv_path}: {e}")
-        return
+    if type(input_csv_path) == str:
+        print(f"\n📥 Reading clustered news from: {input_csv_path}")
+        try:
+            clustered_df = pd.read_csv(input_csv_path)
+        except FileNotFoundError:
+            print(f"❌ Error: Input CSV file not found at {input_csv_path}")
+            return
+        except Exception as e:
+            print(f"❌ Error reading CSV {input_csv_path}: {e}")
+            return
+    else:
+        clustered_df = input_csv_path.copy()
 
     if 'content' not in clustered_df.columns or 'cluster' not in clustered_df.columns:
         print("❌ Error: Input CSV must contain 'content' and 'cluster' columns.")
