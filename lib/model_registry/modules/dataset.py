@@ -1,6 +1,7 @@
 from pathlib import Path
+import pandas as pd
 
-def get_test(debug_path=None):
+def get_test(csv_path, debug_path=None):
     sentences = []
     if debug_path is not None:
         txt_files = list(Path(debug_path).glob("*.txt"))
@@ -10,7 +11,11 @@ def get_test(debug_path=None):
                 if full_text:
                     sentences.append(full_text)
         print(f"Loaded {len(sentences)} test documents.")
+    else:
+        df = pd.read_csv(csv_path)
+        df = df.dropna(subset=["content"])
+        sentences = df["content"].tolist()
     return sentences
 
 if __name__ == "__main__":
-    get_test(True)
+    get_test(debug_path=True)

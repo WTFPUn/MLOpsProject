@@ -7,10 +7,11 @@ import os
 import logging
 import asyncio # Though not directly used for execution, good for async context of FastAPI
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Response
 from fastapi.responses import StreamingResponse, FileResponse
 import pandas as pd
 import io
+import json
 from embed_news import Embeder
 
 # --- Configuration ---
@@ -44,6 +45,7 @@ try:
     from summarize_clustered_news import (
         initialize_llm_model_and_pipeline,
         process_and_summarize_clustered_news,
+        formated_summary
     )
     summarizer_script_available = True
     
@@ -53,6 +55,7 @@ except ImportError as e:
     # Define dummy functions if import fails, so API can start but endpoints will error out
     def initialize_llm_model_and_pipeline(): logging.error("Summarizer script not found, dummy initialize_llm called"); return None, None
     def process_and_summarize_clustered_news(input_path, output_path): logging.error("Summarizer script not found, dummy process_and_summarize called"); return None
+    def formated_summary(dynamic_title: str, cluster_id: int, full_summarized_content: str, run_date_str: str, csv_filename: str): logging.error("Summarizer script not found, dummy formated_summary called"); return ""
     SUMMARIZER_LLM_PIPELINE = None
     SUMMARIZER_LLM_TOKENIZER = None
 
@@ -138,18 +141,26 @@ async def summarize(file: UploadFile = File(...), output_path: str = Form(...)):
 
     # ✅ Step 2: Do processing (optional, plug in your own logic)
     # Example: Maybe reverse your embedding here?
-    process_and_summarize_clustered_news(df, output_path)
+    summary = process_and_summarize_clustered_news(df, output_path)
 
+    # out_df = 
     # ✅ Step 3: Return CSV file
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
+    # output = io.StringIO()
+    # df.to_csv(output, index=False)
+    # output.seek(0)
     
-    return StreamingResponse(
-        output,
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={output_path}"}
+    return Response(
+        content=json.dumps({
+            "data": summary,
+        }),
+        status_code=200,
     )
+
+    # StreamingResponse(
+    #     output,
+    #     media_type="text/csv",
+    #     headers={"Content-Disposition": f"attachment; filename={output_path}"}
+    # )
 
 # @app.post("/summarize-news/", response_model=SummarizationResponse, tags=["Summarization"])
 # async def trigger_summarization(request: SummarizationRequest, background_tasks: BackgroundTasks):

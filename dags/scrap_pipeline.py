@@ -62,7 +62,7 @@ with DAG(
     current_date = datetime.now()
     try:
       s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
-       f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+       f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv")
       print(f"✅ S3 upload successful: news_week_{date_parser(get_start_of_week(current_date))}.csv")
     except Exception as e:
       print(f"❌ S3 upload failed: {e}")
@@ -76,7 +76,7 @@ with DAG(
     current_date = datetime.now()
     try:
       s3.download_file("kmuttcpe393datamodelnewssum",
-       f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv",
+       f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv",
        f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv")
       print(f"✅ S3 download successful: news_week_{date_parser(get_start_of_week(current_date))}.csv")
     except Exception as e:

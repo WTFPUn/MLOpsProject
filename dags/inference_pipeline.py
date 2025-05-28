@@ -45,9 +45,12 @@ with DAG(
         current_date = datetime.now()
         try:
           print(f"Downloading file from S3: news_week_{date_parser(get_start_of_week(current_date))}.csv")
-          s3.download_file("kmuttcpe393datamodelnewssum",
-          f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv",
-          f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+          s3.download_file(
+            "kmuttcpe393datamodelnewssum",
+            f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv",
+            f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv"
+          )
+          
           csv_file = f"data/news_week_{date_parser(get_start_of_week(current_date))}.csv"
           print(f"✅ S3 file downloaded to: {csv_file}")
         except Exception as e:
@@ -91,10 +94,10 @@ with DAG(
         print("Topic modelling...")
         clustered_file = input_data["csv_file"]#"/tmp/news_clustered.csv"
         repo_name = input_data["repo_name"]
-
         import io
         import pandas as pd
         import requests
+        print(clustered_file)
 
         # ✅ Step 1: Create or have a DataFrame
         df = pd.read_csv(clustered_file)
@@ -111,8 +114,8 @@ with DAG(
             data={"repo_name": repo_name}  
         )
 
-        # ✅ Step 4: Handle response
-        with open("embedding_output.csv", "wb") as f:
+        # # ✅ Step 4: Handle response
+        with open("embedding_output.pkl", "wb") as f:
             f.write(response.content)
         print("Processed CSV saved.")
 
@@ -120,7 +123,7 @@ with DAG(
         # embedding = embed_colbert(clustered_file, repo_name)
         # print(embedding)
         # from lib.news_cluster.embed_news 
-        return "embedding_output.csv"
+        return "embedding_output.pkl"
 
     embed_task = PythonVirtualenvOperator(
         task_id="get_topic_embedding",
