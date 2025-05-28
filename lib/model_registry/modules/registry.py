@@ -39,4 +39,5 @@ def get_runs_with_same_param_value(repo_name: str, exp_info):
     return runs_df
 
 if __name__ == "__main__":
+    print(EXPERIMENT_NAME)
     print(get_current_model(EXPERIMENT_NAME, "calinski_harabasz_score", "MINIMIZE"))

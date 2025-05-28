@@ -7,6 +7,11 @@ import os
 import logging
 import asyncio # Though not directly used for execution, good for async context of FastAPI
 from typing import Optional
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
+import pandas as pd
+import io
+from embed_news import Embeder
 
 # Attempt to import functions from your summarization script
 try:
@@ -67,10 +72,25 @@ class SummarizationResponse(BaseModel):
     output_file: Optional[str] = None
     status: str = "pending" # pending, processing, completed, failed
 
+# class EmbedRequest(BaseModel):
+#     input_clustered_csv: str = Field(..., example="news_clustered.csv", description="Path to the CSV file from news_cluster.py (must have 'content' and 'cluster' columns).")
+#     # Aligning default with the summarizer script's default
+#     output_summary_csv: Optional[str] = Field("llm_summaries_archive_with_dynamic_title.csv", 
+#                                              example="llm_summaries_with_titles.csv", 
+                           
+#                                              description="Desired path for the output CSV file containing summaries.")
+# class EmbedResponse(BaseModel):
+#     message: str
+#     output_file: Optional[str] = None
+#     status: str = "pending" # pending, processing, completed, failed
+
+
 
 # --- API Endpoints ---
 @app.on_event("startup")
 async def startup_event():
+    global embedder
+    embedder = Embeder()
     logger.info(f"News Summarization API (v{app.version}) starting up...")
     if summarizer_script_available:
         initialize_llm_model_and_pipeline() # This function now handles the global LLM_PIPELINE
@@ -95,6 +115,22 @@ def run_summarization_background(input_path: str, output_path: str):
         logger.error(f"Error in background summarization task for {input_path}: {e}", exc_info=True)
         # For more robust error reporting, you might write status to a file or DB
         # that the main API could poll or another endpoint could check.
+
+@app.post("/embed/")
+async def embed(file: UploadFile = File(...), repo_name: str = Form(...)):
+    df = pd.read_csv(file.file)
+
+    # Example: Apply operation based on string param
+    pkl_path = embedder.embed_colbert(df,repo_name,api=True)
+    # output = io.StringIO()
+    # df.to_csv(output, index=False)
+    # output.seek(0)
+    # return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=processed.csv"})
+    return FileResponse(
+        path=pkl_path,
+        media_type="application/octet-stream",
+        filename=pkl_path
+    )
 
 @app.post("/summarize-news/", response_model=SummarizationResponse, tags=["Summarization"])
 async def trigger_summarization(request: SummarizationRequest, background_tasks: BackgroundTasks):

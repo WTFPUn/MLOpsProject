@@ -12,10 +12,10 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-    AIRFLOW__CORE__FERNET_KEY: ""
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-    AIRFLOW__CORE__LOAD_EXAMPLES: "true"
-    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     PYTHONPATH: "/opt/airflow:/opt/airflow/lib"
     # yamllint disable rule:line-length
     # Use simple http server on scheduler for health checks
@@ -58,17 +58,15 @@ services:
       retries: 5
       start_period: 5s
     restart: always
-
-
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
     # https://redis.io/blog/redis-adopts-dual-source-available-licensing/
     image: redis:7.2-bookworm
     ports:
       - "6379:6379"
-    container_name: redis
-    networks:
-      - backend
+    # container_name: redis
+    # networks:
+    #   - backend
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -76,6 +74,21 @@ services:
       retries: 50
       start_period: 30s
     restart: always
+
+  # redis_airflow:
+  #   # Redis is limited to 7.2-bookworm due to licencing change
+  #   # https://redis.io/blog/redis-adopts-dual-source-available-licensing/
+  #   image: redis:7.2-bookworm
+  #   ports:
+  #     - "6380:6380"
+  #   container_name: redis_airflow
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 30s
+  #     retries: 50
+  #     start_period: 30s
+  #   restart: always
 
   airflow-webserver:
     <<: *airflow-common
@@ -300,7 +313,7 @@ services:
       - "5000:5000"
     volumes:
       # - ./mlruns:/mlflow/mlruns
-      - ./mlruns:/mlruns
+      - ./lib/model_registry/mlruns:/mlruns
     environment:
       - MLFLOW_TRACKING_URI=http://0.0.0.0:5000
     command: >
@@ -320,6 +333,12 @@ services:
       - ENV_FILE=.env
     networks:
       - backend
+  
+  # airflow-python:
+  #   build:
+  #     context: ./dag_lib/python
+  #     dockerfile: Dockerfile
+  #   container_name: airflow-python
 
 volumes:
   postgres-db-volume:

@@ -3,6 +3,8 @@ from config import *
 from modules.pipeline import run_experiment
 from modules.registry import get_current_model
 from modules.model import is_challenged
+import sys
+    sys.path.append("/lib")
 
 
 def trial():

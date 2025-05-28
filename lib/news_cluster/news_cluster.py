@@ -41,6 +41,7 @@ def cluster_colbert_vectors(input_folder, output_csv, as_folder = False):
     print(f"💾 Saving clustered results to {output_csv}")
     merged_df.to_csv(output_csv, index=False)
     print("✅ Done!")
+    return output_csv
 
 
 if __name__ == "__main__":
