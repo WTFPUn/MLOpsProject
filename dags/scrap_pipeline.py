@@ -4,6 +4,12 @@ from airflow.models import Variable
 
 from datetime import datetime, timedelta
 import os
+import dotenv
+dotenv_path = dotenv.find_dotenv()
+if dotenv_path:
+    print(f"Found .env file at {dotenv_path}")
+    # export dotenv_path to environment variables
+    dotenv.load_dotenv(dotenv_path)
 
 AWS_REGION         = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
 GEMMA_MODEL_PATH   = ""
@@ -57,12 +63,14 @@ with DAG(
     try:
       s3.upload_file(csv_file, "kmuttcpe393datamodelnewssum",
        f"news_summary/news_week_{date_parser(get_start_of_week(current_date))}.csv")
+      print(f"✅ S3 upload successful: news_week_{date_parser(get_start_of_week(current_date))}.csv")
     except Exception as e:
       print(f"❌ S3 upload failed: {e}")
       
       
   @task()
   def download_from_s3():
+    AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")
     import boto3
     s3 = boto3.client("s3")
     current_date = datetime.now()
