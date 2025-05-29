@@ -8,7 +8,7 @@ from redis import Redis
 
 redis = Redis(host='host.docker.internal', port=6379, db=0,decode_responses=True)
 
-__all__ = ["query_news", "store_news", "get_news_by_date"]
+__all__ = ["query_news", "store_news", "get_news_by_date", "query_date_list"]
 
 def get_start_of_week(date: datetime) -> datetime:
     start_of_week = date - timedelta(days=date.weekday())
@@ -127,3 +127,23 @@ async def get_news_by_date(date: datetime):
     await db.disconnect()
     
     return news_article
+
+async def query_date_list() -> List[str]:
+    """
+    Get a list of dates for which news articles are available.
+    """
+    db = Prisma()
+    
+    await db.connect()
+    
+    news_dates = await db.news.find_many(
+        distinct=["startDate"],
+        order={
+            "startDate": "desc",
+        },
+    )
+    
+    await db.disconnect()
+    
+    # return in a list of strings in 'YYYY-MM-DD' format
+    return [news_date.startDate.strftime('%Y-%m-%d') for news_date in news_dates]

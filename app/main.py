@@ -31,7 +31,7 @@ if dotenv_path:
     # export dotenv_path to environment variables
     dotenv.load_dotenv(dotenv_path)
     
-prefix = "news_summary/news_week"
+prefix = "news_summary"
 s3 = boto3.client('s3', region_name='ap-southeast-1')  # specify your region
 bucket_name = 'kmuttcpe393datamodelnewssum'
 
@@ -46,8 +46,13 @@ def extract_date(filename):
     Returns:
         str: The extracted date in 'YYYY-MM-DD' format, or None if not found.
     """
-    match = re.search(r'news_week_(\d{4}-\d{2}-\d{2})', filename)
-    return match.group(1) if match else None
+    print(f"Extracting date from filename: {filename}")
+    match = re.search(r'\d{4}\d{2}\d{2}', filename)
+
+    # get the date part from the match
+    match = match.group(0) if match else None
+    # chanhe the date format to DDMMYYYY to YYYY-MM-DD
+    return match[4:]+"-"+match[2:4]+"-"+match[0:2] if match else None
 
 def get_csv(cluster, date):
     print(f"Fetching CSV for cluster/{date}/{cluster}.csv")
@@ -87,24 +92,25 @@ with gr.Blocks() as demo:
         return data.value[group_name].content if group_name in data.value else "No content available", df, gr.update(value=f"csv/{file_id}.csv", interactive=True)
         # return group_name
     
-    def load_s3_files():
+    def load_date():
         try:
-            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-            if 'Contents' in response:
-                files = [extract_date(obj['Key']) for obj in response['Contents'] if obj['Key'].endswith(".csv")]
-                return gr.update(choices=files)
+            response = requests.get("http://host.docker.internal:8000/getdatelist")  # Replace with your actual URL if different
+            if response.status_code == 200:
+                dates = response.json()["data"]
+                if not dates:
+                    return []
+                return dates           
             else:
-                return gr.update(choices=["No files found"])
+                return []
         except (NoCredentialsError, ClientError) as e:
-            return gr.update(choices=[f"Error: {str(e)}"])
+            return []
 
     with gr.Column():
         
         with gr.Column(scale=2):
-            dropdown = gr.Dropdown(choices=[], label="Select File from S3")
+            dropdown = gr.Dropdown(choices=load_date(), label="Select Date", interactive=True, value=None)
         with gr.Row(scale=1):
             query_btn = gr.Button("Query", variant="primary")
-            gr.Button("Load Files", variant="secondary").click(fn=load_s3_files, inputs=None, outputs=dropdown)
             
     with gr.Row(max_height=500):
         with gr.Column(scale=1):
@@ -122,9 +128,10 @@ with gr.Blocks() as demo:
                 download = gr.DownloadButton("Export CSV", value=None, interactive=True, variant="primary")
     def update_group_cards(filter_value):
         choice, data = query_groups(filter_value)
-        return gr.update(choices=choice, value=None), data
+        return gr.update(choices=choice, value=None), data, gr.update(value=""), gr.DataFrame(visible=False), gr.update(value=None, interactive=False)
 
-    query_btn.click(fn=update_group_cards, inputs=dropdown, outputs=[group_cards, data])
+    query_btn.click(fn=update_group_cards, inputs=dropdown, outputs=[group_cards, data, group_info])
     group_cards.change(fn=show_group_info, inputs=[group_cards, dropdown], outputs=[group_info, table, download])
 
+    
 demo.launch(server_name="0.0.0.0")
