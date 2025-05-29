@@ -21,7 +21,7 @@ this is needed to bge run to obtain base line model for production
 1. get amazon s3 account
 2. get credential and put it in in ./dag/.env file according to ./dag/example.env
 
-## 5. run out service
+## 5. run our service
 after our gpuserver is on you can run dags you can check status of each pipeline which run on its own. as mlops enginneer you can observe resut from the model monitoring pipeline to schedule finetuning llm as need (this help minimize the unneccessary cost as complex operation is required to obtain new model. which cannot be automated and should not be)
 
 you can access services via these port
