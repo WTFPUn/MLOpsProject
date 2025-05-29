@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 
 from models import News, GetClusterNames
-from query import query_news, store_news, get_news_by_date
+from query import query_news, store_news, get_news_by_date, query_date_list
 
 app = FastAPI()
 
@@ -69,6 +69,30 @@ async def post_news(request: Request):
     REQUEST_COUNTER.labels(endpoint="/news", status_code=str(status_code)).inc()
     with REQUEST_LATENCY.labels(endpoint="/news", status_code=str(status_code)).time():
         return FastAPIResponse(content='{"status": "ok"}', media_type="application/json", status_code=status_code)
+
+@app.get("/getdatelist")
+async def get_date_list():
+    """
+    Get a list of dates for which news is available.
+    """
+    try:
+        dates = await query_date_list()
+        if not dates:
+            status_code = 404
+            REQUEST_COUNTER.labels(endpoint="/getdatelist", status_code=str(status_code)).inc()
+            with REQUEST_LATENCY.labels(endpoint="/getdatelist", status_code=str(status_code)).time():
+                return FastAPIResponse(content='{"error": "No dates found"}', media_type="application/json", status_code=status_code)
+        
+        status_code = 200
+        REQUEST_COUNTER.labels(endpoint="/getdatelist", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/getdatelist", status_code=str(status_code)).time():
+            return FastAPIResponse(content=json.dumps({"data": dates}), media_type="application/json", status_code=status_code)
+    except Exception as e:
+        status_code = 500
+        REQUEST_COUNTER.labels(endpoint="/getdatelist", status_code=str(status_code)).inc()
+        with REQUEST_LATENCY.labels(endpoint="/getdatelist", status_code=str(status_code)).time():
+            return FastAPIResponse(content=f'{{"error": "{str(e)}"}}', media_type="application/json", status_code=status_code)
+
 
 @app.get("/getclusternames")
 async def get_cluster_names(dt_str: str):
