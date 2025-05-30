@@ -1,3 +1,6 @@
+# introduction
+our code is bulit to serve people who dont have time to catch up with what happening in Thailand. we scrap news from thairath (https://www.thairath.co.th/home) and provide iterative pipeline for clustering and summarize the news weekly. ensure that all people will catch up with news even if they dont have time.
+
 # setup
 ## 1. to start service
 docker compose -f .\compose.yml -d up 
